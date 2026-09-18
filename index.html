@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<title>广西饲料厂分布地图</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif}
+  #map{position:absolute;inset:0;background:#eef2f5}
+
+  #panel{
+    position:absolute;top:10px;left:10px;bottom:10px;width:352px;z-index:1000;
+    background:rgba(255,255,255,.97);backdrop-filter:blur(8px);
+    border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.20);
+    display:flex;flex-direction:column;overflow:hidden;
+    transition:transform .28s ease, opacity .28s ease;
+  }
+  #panel.hide{transform:translateX(-380px);opacity:0;pointer-events:none}
+
+  .head{padding:13px 15px 9px;border-bottom:1px solid #eef1f4;position:relative}
+  .head h1{margin:0;font-size:15.5px;letter-spacing:.4px;color:#0f172a}
+  .head .sub{margin-top:4px;font-size:11.5px;color:#64748b}
+  .head .sub b{color:#e74c3c;font-variant-numeric:tabular-nums}
+  #closeBtn{
+    position:absolute;top:11px;right:12px;width:26px;height:26px;border:none;
+    border-radius:8px;background:#f1f5f9;color:#64748b;font-size:15px;
+    cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;
+  }
+  #closeBtn:hover{background:#e2e8f0}
+
+  #q{margin:9px 14px 0;padding:8px 11px;font-size:13px;border:1px solid #dbe2e8;
+     border-radius:9px;outline:none;background:#f8fafc;color:#0f172a}
+  #q:focus{border-color:#94a3b8;background:#fff}
+
+  .chips{display:flex;flex-wrap:wrap;gap:5px;padding:9px 14px 5px;
+         max-height:82px;overflow-y:auto}
+  .chip{font-size:11.5px;padding:3px 9px;border-radius:999px;cursor:pointer;
+        background:#f1f5f9;color:#475569;border:1px solid transparent;
+        user-select:none;white-space:nowrap;transition:.15s}
+  .chip:hover{background:#e2e8f0}
+  .chip.on{background:#0f172a;color:#fff;border-color:#0f172a}
+
+  .list{flex:1;overflow-y:auto;padding:5px 8px 12px;-webkit-overflow-scrolling:touch}
+  .item{display:flex;align-items:center;gap:9px;padding:8px 7px;
+        border-radius:9px;cursor:pointer;transition:background .12s}
+  .item:hover{background:#f1f5f9}
+  .item.sel{background:#e0ecff}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none;
+       box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(0,0,0,.07)}
+  .it-main{flex:1;min-width:0}
+  .it-name{font-size:12.5px;color:#0f172a;line-height:1.35;
+           overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .it-sub{font-size:11px;color:#8a95a4;margin-top:2px;
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cap{font-size:11px;color:#0f766e;background:#ecfdf5;border-radius:6px;
+       padding:2px 6px;flex:none;font-variant-numeric:tabular-nums}
+  .cap.na{color:#94a3b8;background:#f1f5f9}
+
+  .foot{padding:7px 14px 10px;font-size:10.5px;color:#a0aab5;
+        border-top:1px solid #eef1f4;line-height:1.6}
+
+  #openBtn{
+    position:absolute;top:10px;left:10px;z-index:1000;display:none;
+    padding:9px 13px;border:none;border-radius:10px;cursor:pointer;
+    background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.18);
+    font-size:13px;color:#0f172a;font-weight:500;
+  }
+  #openBtn.show{display:block}
+
+  .pop{font-size:12.5px;min-width:236px}
+  .pop-name{font-size:13.5px;font-weight:600;color:#0f172a;margin-bottom:7px;line-height:1.4}
+  .pop table{width:100%;border-collapse:collapse}
+  .pop td{padding:3px 0;vertical-align:top;color:#334155;line-height:1.5}
+  .pop td:first-child{width:46px;color:#94a3b8}
+  .leaflet-popup-content{margin:12px 14px}
+  .leaflet-popup-content-wrapper{border-radius:12px}
+
+  #boot{position:absolute;inset:0;z-index:2000;display:flex;
+        align-items:center;justify-content:center;background:#f8fafc;
+        font-size:13px;color:#64748b;text-align:center;padding:24px;line-height:1.9}
+  #boot.hide{display:none}
+  #boot code{background:#eef2f7;padding:1px 6px;border-radius:5px;
+             font-size:12px;color:#0f172a}
+  .spin{width:26px;height:26px;border:2.5px solid #dbe4ee;border-top-color:#0f172a;
+        border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 12px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  @media (max-width:760px){
+    #panel{
+      top:auto;left:0;right:0;bottom:0;width:auto;
+      height:58vh;max-height:520px;
+      border-radius:18px 18px 0 0;
+      padding-bottom:env(safe-area-inset-bottom);
+    }
+    #panel.hide{transform:translateY(105%);opacity:1}
+    #panel::before{
+      content:'';position:absolute;top:7px;left:50%;transform:translateX(-50%);
+      width:38px;height:4px;border-radius:99px;background:#d8dee6;
+    }
+    .head{padding-top:18px}
+    .chips{max-height:62px}
+    #openBtn{bottom:16px;top:auto;left:12px;font-size:12.5px;padding:8px 12px}
+    .leaflet-control-layers{font-size:12px}
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<button id="openBtn">☰ 列表 / 筛选</button>
+
+<div id="panel">
+  <div class="head">
+    <h1>广西饲料厂分布图</h1>
+    <div class="sub">共 <b id="total">–</b> 家 · 圆点大小 = 年产能（万吨）</div>
+    <button id="closeBtn" title="收起">×</button>
+  </div>
+  <input id="q" placeholder="搜索厂名 / 简称 / 集团 / 县区">
+  <div class="chips" id="chips"></div>
+  <div class="list" id="list"></div>
+  <div class="foot">点击列表定位 · 点击圆点看详情 · 右上角切换底图</div>
+</div>
+
+<div id="boot">
+  <div>
+    <div class="spin"></div>
+    <div>正在加载数据 …</div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================
+   配置区
+   ========================================================== */
+const CENTER = [23.6, 108.4];   // 初始地图中心
+const ZOOM   = 7;               // 初始缩放
+
+// 每个城市一个颜色，按需增删
+const CITY_COLOR = {
+  '南宁市':'#e74c3c','桂林市':'#3498db','玉林市':'#e67e22','贵港市':'#16a085',
+  '钦州市':'#9b59b6','柳州市':'#27ae60','北海市':'#0ea5e9','贺州市':'#eab308',
+  '梧州市':'#ec4899','百色市':'#78716c','来宾市':'#a16207','崇左市':'#4f46e5',
+  '防城港市':'#0d9488','河池市':'#d97706'
+};
+const DEFAULT_COLOR = '#64748b';
+
+// 数据源：优先 data.csv，读不到就用 data.json
+const DATA_SOURCES = [
+  { url:'data.csv',  type:'csv'  },
+  { url:'data.json', type:'json' }
+];
+
+/* ==========================================================
+   1. 地图底图
+   ========================================================== */
+const map = L.map('map', { zoomControl:false, preferCanvas:true }).setView(CENTER, ZOOM);
+L.control.zoom({ position:'bottomright' }).addTo(map);
+
+const amapVec = L.tileLayer(
+  'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+  { subdomains:'1234', maxZoom:18, attribution:'© 高德地图' });
+const amapSat = L.tileLayer(
+  'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+  { subdomains:'1234', maxZoom:18, attribution:'© 高德地图' });
+const osm = L.tileLayer(
+  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { maxZoom:19, attribution:'© OpenStreetMap' });
+
+amapVec.addTo(map);
+L.control.layers(
+  { '高德矢量': amapVec, '高德影像': amapSat, 'OpenStreetMap': osm },
+  null, { position:'topright' }
+).addTo(map);
+
+/* ==========================================================
+   2. 数据读取与解析
+   ========================================================== */
+const activeLayer = L.layerGroup().addTo(map);
+const markerById  = {};
+let DATA = [];
+let citySel = null, keyword = '', counts = {};
+
+// 列名别名表 —— 自动识别中英文表头
+const FIELD_ALIASES = {
+  id:       ['id','编号'],
+  city:     ['city','城市','市'],
+  county:   ['county','区县','县','区'],
+  address:  ['address','地址','详细地址'],
+  coord:    ['latitude and longitude','latlng','coordinate','coordinates','经纬度','坐标'],
+  lng:      ['lng','lon','longitude','经度'],
+  lat:      ['lat','latitude','纬度'],
+  name:     ['name','厂名','企业名称','公司名称','公司','饲料厂名称'],
+  abbr:     ['abbreviation','abbr','简称'],
+  group:    ['group_name','group','归属','集团','所属集团','母公司'],
+  capacity: ['capacity','产能','年产能','设计产能','万吨']
+};
+
+function headerKey(s){
+  return String(s||'').trim().toLowerCase().replace(/[\s_\-]+/g,'');
+}
+function headerToField(h){
+  const k = headerKey(h);
+  for(const field in FIELD_ALIASES){
+    for(const a of FIELD_ALIASES[field]){
+      if(k === headerKey(a)) return field;
+    }
+  }
+  return null;
+}
+
+// —— CSV 解析（支持双引号包裹、逗号、换行）——
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQ){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQ = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQ = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else if(c === '\r'){ /* skip */ }
+      else field += c;
+    }
+  }
+  if(field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(f => String(f).trim() !== ''));
+}
+
+function csvToObjects(rows){
+  if(!rows.length) return [];
+  const headers = rows[0].map(headerToField);
+  return rows.slice(1).map(r => {
+    const o = {};
+    headers.forEach((f,i) => { if(f) o[f] = String(r[i] == null ? '' : r[i]).trim(); });
+    return o;
+  });
+}
+
+// 统一成内部结构
+function normalize(o){
+  let lng = parseFloat(o.lng);
+  let lat = parseFloat(o.lat);
+  if((isNaN(lng) || isNaN(lat)) && o.coord){
+    const m = String(o.coord).match(/(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)/);
+    if(m){ lng = parseFloat(m[1]); lat = parseFloat(m[2]); }
+  }
+  const capRaw = String(o.capacity == null ? '' : o.capacity).replace(/[^\d.\-]/g,'');
+  const capacity = capRaw === '' ? null : Number(capRaw);
+
+  return {
+    id:       o.id || ('row-' + Math.random().toString(36).slice(2,8)),
+    name:     o.name || '未命名',
+    city:     o.city || '其他',
+    county:   o.county || '',
+    address:  o.address || '',
+    abbr:     o.abbr || '',
+    group:    o.group || '',
+    capacity: (capacity == null || isNaN(capacity)) ? null : capacity,
+    lng, lat
+  };
+}
+
+const isValid = d => d && isFinite(d.lng) && isFinite(d.lat) &&
+                     d.lng > 60 && d.lng < 140 && d.lat > 3 && d.lat < 55;
+
+async function loadData(){
+  let lastErr = null;
+  for(const src of DATA_SOURCES){
+    try{
+      const res = await fetch(src.url, { cache:'no-store' });
+      if(!res.ok) continue;
+      let text = await res.text();
+      text = text.replace(/^\uFEFF/, '');   // 去掉 Excel 的 BOM
+      let list;
+      if(src.type === 'csv'){
+        list = csvToObjects(parseCSV(text));
+      }else{
+        const j = JSON.parse(text);
+        list = Array.isArray(j) ? j : (j.data || []);
+      }
+      const out = list.map(normalize).filter(isValid);
+      if(out.length) return out;
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('没有找到可用的 data.csv 或 data.json');
+}
+
+/* ==========================================================
+   3. 画点
+   ========================================================== */
+function radiusOf(cap){
+  if(cap == null || cap <= 0) return 4.5;
+  return Math.min(16, 4 + 4 * Math.sqrt(cap));
+}
+
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function popupHtml(d){
+  const cap = d.capacity == null ? '—' : d.capacity + ' 万吨/年';
+  const row = (k, v) => v ? '<tr><td>' + k + '</td><td>' + esc(v) + '</td></tr>' : '';
+  return '<div class="pop">'
+    + '<div class="pop-name">' + esc(d.name) + '</div>'
+    + '<table>'
+    + row('位置', d.city + ' ' + d.county)
+    + row('地址', d.address)
+    + row('简称', d.abbr)
+    + row('产能', cap)
+    + row('归属', d.group)
+    + row('坐标', d.lng.toFixed(4) + ', ' + d.lat.toFixed(4))
+    + '</table></div>';
+}
+
+function buildMarkers(){
+  DATA.forEach(d => {
+    const color = CITY_COLOR[d.city] || DEFAULT_COLOR;
+    const m = L.circleMarker([d.lat, d.lng], {
+      radius: radiusOf(d.capacity),
+      color: '#ffffff',
+      weight: 1.2,
+      fillColor: color,
+      fillOpacity: d.capacity == null ? 0.55 : 0.88,
+      dashArray: d.capacity == null ? '3,2' : null
+    });
+    m.bindPopup(popupHtml(d), { maxWidth:320 });
+    m.bindTooltip(d.name, { direction:'top', offset:[0,-4] });
+    m.on('click', () => selectCard(d.id));
+    markerById[d.id] = m;
+  });
+}
+
+/* ==========================================================
+   4. 侧边栏
+   ========================================================== */
+const listEl  = document.getElementById('list');
+const chipsEl = document.getElementById('chips');
+const qEl     = document.getElementById('q');
+const totalEl = document.getElementById('total');
+const panel   = document.getElementById('panel');
+const openBtn = document.getElementById('openBtn');
+
+function buildChips(){
+  counts = {};
+  DATA.forEach(d => counts[d.city] = (counts[d.city] || 0) + 1);
+  const cities = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+
+  chipsEl.innerHTML = '';
+  chipsEl.appendChild(makeChip('全部 ' + DATA.length, null, null));
+  cities.forEach(c => chipsEl.appendChild(
+    makeChip(c + ' ' + counts[c], c, CITY_COLOR[c] || DEFAULT_COLOR)
+  ));
+
+  function makeChip(label, city, color){
+    const el = document.createElement('div');
+    el.className = 'chip' + (city === null ? ' on' : '');
+    el.textContent = label;
+    if(color) el.style.borderColor = color;
+    el.dataset.city = city === null ? '' : city;
+    el.onclick = () => {
+      citySel = (citySel === city) ? null : city;
+      syncChips(); render();
+    };
+    return el;
+  }
+}
+
+function syncChips(){
+  [...chipsEl.children].forEach(el => {
+    el.classList.toggle('on', (el.dataset.city || null) === citySel);
+  });
+}
+
+function render(){
+  activeLayer.clearLayers();
+
+  const q = keyword.toLowerCase();
+  const rows = DATA.filter(d => {
+    if(citySel && d.city !== citySel) return false;
+    if(q){
+      const hay = (d.name + d.abbr + d.group + d.city + d.county + d.address).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b) => (b.capacity || 0) - (a.capacity || 0));
+
+  rows.forEach(d => markerById[d.id].addTo(activeLayer));
+
+  if(!rows.length){
+    listEl.innerHTML = '<div style="padding:26px;color:#94a3b8;font-size:12px;text-align:center">'
+                     + '没有匹配的工厂</div>';
+    return;
+  }
+
+  listEl.innerHTML = rows.map(d => {
+    const cap = d.capacity == null
+      ? '<span class="cap na">—</span>'
+      : '<span class="cap">' + d.capacity + '</span>';
+    const color = CITY_COLOR[d.city] || DEFAULT_COLOR;
+    return '<div class="item" data-id="' + d.id + '">'
+      + '<span class="dot" style="background:' + color + '"></span>'
+      + '<div class="it-main">'
+      +   '<div class="it-name">' + esc(d.name) + '</div>'
+      +   '<div class="it-sub">' + esc(d.city + ' ' + d.county + (d.abbr ? ' · ' + d.abbr : '')) + '</div>'
+      + '</div>' + cap + '</div>';
+  }).join('');
+
+  listEl.querySelectorAll('.item').forEach(el => {
+    el.onclick = () => {
+      const d = DATA.find(x => x.id === el.dataset.id);
+      if(!d) return;
+      map.flyTo([d.lat, d.lng], Math.max(map.getZoom(), 11), { duration:.7 });
+      setTimeout(() => markerById[d.id].openPopup(), 720);
+      selectCard(d.id);
+      if(window.innerWidth <= 760) togglePanel(false);
+    };
+  });
+}
+
+function selectCard(id){
+  listEl.querySelectorAll('.item').forEach(el => {
+    const on = el.dataset.id === id;
+    el.classList.toggle('sel', on);
+    if(on) el.scrollIntoView({ block:'nearest', behavior:'smooth' });
+  });
+}
+
+qEl.addEventListener('input', e => { keyword = e.target.value.trim(); render(); });
+
+function togglePanel(show){
+  panel.classList.toggle('hide', !show);
+  openBtn.classList.toggle('show', !show);
+}
+document.getElementById('closeBtn').onclick = () => togglePanel(false);
+openBtn.onclick = () => togglePanel(true);
+
+/* ==========================================================
+   5. 启动
+   ========================================================== */
+function showBootError(err){
+  document.getElementById('boot').innerHTML =
+    '<div style="max-width:440px">'
+    + '<div style="font-size:32px;margin-bottom:10px">⚠️</div>'
+    + '<div style="color:#0f172a;font-weight:600;margin-bottom:8px">数据加载失败</div>'
+    + '<div style="font-size:12.5px;color:#64748b">'
+    + esc(err.message) + '<br><br>'
+    + '请确认 <code>data.csv</code> 与 <code>index.html</code> 在同一目录，<br>'
+    + '并通过 <b>http(s)://</b> 访问（直接双击本地文件会被浏览器拦截）。'
+    + '</div></div>';
+}
+
+(async function boot(){
+  try{
+    DATA = await loadData();
+    document.getElementById('boot').classList.add('hide');
+    totalEl.textContent = DATA.length;
+
+    buildMarkers();
+    buildChips();
+    render();
+
+    map.fitBounds(L.latLngBounds(DATA.map(d => [d.lat, d.lng])),
+                   { padding:[40,40], maxZoom:10 });
+
+    if(window.innerWidth <= 760) togglePanel(false);
+  }catch(err){
+    showBootError(err);
+  }
+})();
+</script>
+</body>
+</html>
