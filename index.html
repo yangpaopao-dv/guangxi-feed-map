@@ -7,10 +7,9 @@
 <title>广西饲料厂分布地图</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- 引入 Supabase JS SDK，使用备用 CDN 提高国内加载成功率 -->
+<!-- 引入 Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  // 备用 CDN 检测
   if (!window.supabase) {
       document.write('<script src="https://cdn.bootcdn.net/ajax/libs/supabase-js/2.39.3/supabase.min.js"><\/script>');
   }
@@ -193,7 +192,7 @@
    ========================================================== */
 const CENTER = [23.6, 108.4];
 const ZOOM   = 7;
-// 较宽松的广西边界，用于限制地图拖拽，防止滑出太远
+// 广西大致边界
 const GUANGXI_BOUNDS = [[20.5, 103.5], [26.8, 112.8]];
 
 // ✅ Supabase 配置
@@ -258,18 +257,13 @@ L.control.layers(
   null, { position:'topright' }
 ).addTo(map);
 
-// 🌟 新增：生成一个带“空洞”的遮罩层，隐藏广西区域外的地图
-// 使用多边形“挖空”广西，使得外围变成不透明的浅灰色
-const worldBounds = [[-90, -180], [90, 180]];
-// 稍微比限制边界大一点点，以确保广西边缘不会被遮挡
-const maskHole = [[20.4, 103.4], [26.9, 112.9]]; 
-L.polygon([worldBounds, maskHole], {
-    color: 'transparent',
-    fillColor: '#f8fafc', // 与背景色融合
-    fillOpacity: 1,
-    weight: 0,
-    interactive: false
-}).addTo(map);
+// 🌟 隐藏广西区域外的地图：采用四周矩形遮罩法
+const maskStyle = { stroke: false, fillColor: '#eef2f5', fillOpacity: 1, interactive: false };
+const TOP_LAT = 26.8, BOTTOM_LAT = 20.5, LEFT_LNG = 103.5, RIGHT_LNG = 112.8;
+L.rectangle([[TOP_LAT, -180], [90, 180]], maskStyle).addTo(map);        // 上面遮罩
+L.rectangle([[-90, -180], [BOTTOM_LAT, 180]], maskStyle).addTo(map);    // 下面遮罩
+L.rectangle([[BOTTOM_LAT, -180], [TOP_LAT, LEFT_LNG]], maskStyle).addTo(map);   // 左边遮罩
+L.rectangle([[BOTTOM_LAT, RIGHT_LNG], [TOP_LAT, 180]], maskStyle).addTo(map);   // 右边遮罩
 
 /* ==========================================================
    2. 数据读取与解析
@@ -342,18 +336,13 @@ const isValid = d => d && isFinite(d.lng) && isFinite(d.lat) &&
 
 async function loadData(){
   if (!supabaseClient) throw new Error('Supabase 客户端未初始化');
-
   try {
-    const { data, error } = await supabaseClient
-      .from(SUPABASE_API_TABLE)
-      .select('*');
-
+    const { data, error } = await supabaseClient.from(SUPABASE_API_TABLE).select('*');
     if (error) throw new Error(`数据库查询失败: ${error.message}`);
     if (!data || !Array.isArray(data)) throw new Error('数据库返回数据格式不正确');
 
     const out = data.map(normalize).filter(isValid);
     if(out.length) return out;
-    
     throw new Error(`数据库返回了 ${data.length} 条数据，但没有一条符合广西坐标范围。请检查数据库里经纬度是否正确。`);
   } catch(e) {
     throw e;
@@ -464,15 +453,12 @@ function render(){
   rows.forEach(d => markerById[d.id].addTo(activeLayer));
 
   if(!rows.length){
-    listEl.innerHTML = '<div style="padding:26px;color:#94a3b8;font-size:12px;text-align:center">'
-                     + '没有匹配的工厂</div>';
+    listEl.innerHTML = '<div style="padding:26px;color:#94a3b8;font-size:12px;text-align:center">没有匹配的工厂</div>';
     return;
   }
 
   listEl.innerHTML = rows.map(d => {
-    const cap = d.capacity == null
-      ? '<span class="cap na">—</span>'
-      : '<span class="cap">' + d.capacity + '</span>';
+    const cap = d.capacity == null ? '<span class="cap na">—</span>' : '<span class="cap">' + d.capacity + '</span>';
     const color = CITY_COLOR[d.city] || DEFAULT_COLOR;
     return '<div class="item" data-id="' + d.id + '">'
       + '<span class="dot" style="background:' + color + '"></span>'
@@ -512,39 +498,29 @@ document.getElementById('closeBtn').onclick = () => togglePanel(false);
 openBtn.onclick = () => togglePanel(true);
 
 /* ==========================================================
-   5. 个人定位逻辑（自动触发 + 白色三角符号）
+   5. 个人定位逻辑（白色三角符号）
    ========================================================== */
 let userMarker = null;
 let userAccuracyCircle = null;
 
-// SVG格式的白色三角定位图标
+// 绘制白色三角形的 SVG 图标
 const whiteTriangleIcon = L.divIcon({
     className: 'custom-location-icon',
-    html: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L22 22L12 17L2 22L12 2Z" fill="white" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/></svg>',
-    iconSize: [26, 26],
-    iconAnchor: [13, 24], // 让图标底部尖角对准坐标
-    popupAnchor: [0, -24]
+    html: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L21 20L12 16L3 20L12 3Z" fill="white" stroke="#0ea5e9" stroke-width="2" stroke-linejoin="round"/></svg>',
+    iconSize: [24, 24],
+    iconAnchor: [12, 22], // 让三角形底部尖端指向实际坐标
+    popupAnchor: [0, -22]
 });
-
-// 触发定位的方法
-function autoLocateUser() {
-    // setView: false 表示不要强制地图直接飞到用户位置，先标记，用户一移动地图会自动跟随
-    // 如果想直接打开就看到用户位置，设为 true，但会把刚刚 fitBounds 广西全图的视角拉近
-    map.locate({ setView: true, maxZoom: 15 }); 
-}
 
 map.on('locationfound', (e) => {
   if (userMarker) map.removeLayer(userMarker);
   if (userAccuracyCircle) map.removeLayer(userAccuracyCircle);
 
-  // 精度圈
   userAccuracyCircle = L.circle(e.latlng, e.accuracy, {
     color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.1, weight: 1
   }).addTo(map);
 
-  // 白色三角标记
   userMarker = L.marker(e.latlng, { icon: whiteTriangleIcon }).addTo(map);
-
   userMarker.bindPopup('<b>📍 我的位置</b><br>精度：' + Math.round(e.accuracy) + ' 米').openPopup();
 });
 
@@ -579,10 +555,6 @@ function startApp() {
                      { padding:[40,40], maxZoom:10 });
 
       if(window.innerWidth <= 760) togglePanel(false);
-
-      // 🌟 数据加载和视图初始化完成后，自动触发定位，无需询问
-      autoLocateUser();
-
     }catch(err){
       document.getElementById('boot').innerHTML = 
         '<div style="max-width:440px">'
@@ -638,6 +610,11 @@ loginBtn.addEventListener('click', async () => {
     }
 
     console.log('✅ 登录成功，会话信息已获取');
+    
+    // 🌟 关键修改：在用户“点击登录”这个动作的上下文中，立刻触发定位
+    // 这样浏览器就不会因为“无用户手势”而静默拦截定位请求
+    map.locate({ setView: false, maxZoom: 15 });
+
     startApp();
 
   } catch (err) {
@@ -665,16 +642,10 @@ logoutBtn.onclick = async () => {
 };
 
 async function checkSession() {
-  if (!initSupabase()) {
-      console.error('Supabase 初始化失败，无法检查会话。');
-      return;
-  }
+  if (!initSupabase()) return;
   try {
     const { data: { session }, error } = await supabaseClient.auth.getSession();
-    if (error) {
-        console.error('获取会话失败:', error);
-        return;
-    }
+    if (error) return;
     if (session) {
       console.log('🔄 检测到已有登录会话，自动进入地图');
       startApp();
