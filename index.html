@@ -90,6 +90,42 @@
         border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 12px}
   @keyframes sp{to{transform:rotate(360deg)}}
 
+  /* 登录界面样式 */
+  #login-overlay{
+    position:absolute;inset:0;z-index:3000;display:flex;
+    align-items:center;justify-content:center;background:#f1f5f9;
+  }
+  .login-box{
+    background:#fff;padding:30px;border-radius:16px;
+    box-shadow:0 10px 40px rgba(15,23,42,.1);width:90%;max-width:360px;
+  }
+  .login-box h2{margin:0 0 20px 0;font-size:18px;color:#0f172a;text-align:center;}
+  .login-box input{
+    width:100%;padding:10px 12px;margin-bottom:12px;border:1px solid #cbd5e1;
+    border-radius:8px;font-size:14px;outline:none;transition:.2s;
+  }
+  .login-box input:focus{border-color:#0f172a;}
+  .login-box button{
+    width:100%;padding:10px;background:#0f172a;color:#fff;border:none;
+    border-radius:8px;font-size:14px;cursor:pointer;font-weight:500;
+  }
+  .login-box button:hover{background:#1e293b;}
+  .login-err{color:#e74c3c;font-size:12px;margin-bottom:10px;display:none;text-align:center;}
+
+  /* 定位按钮和退出按钮样式 */
+  #locateBtn{
+    position:absolute;bottom:80px;right:10px;z-index:1000;
+    padding:10px;border:none;border-radius:10px;cursor:pointer;
+    background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.18);
+    font-size:13px;color:#0f172a;font-weight:500;display:flex;align-items:center;gap:5px;
+  }
+  #logoutBtn{
+    position:absolute;top:10px;right:10px;z-index:1000;
+    padding:8px 12px;border:none;border-radius:8px;cursor:pointer;
+    background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.18);
+    font-size:12px;color:#e74c3c;font-weight:500;display:none;
+  }
+
   @media (max-width:760px){
     #panel{
       top:auto;left:0;right:0;bottom:0;width:auto;
@@ -106,14 +142,27 @@
     .chips{max-height:62px}
     #openBtn{bottom:16px;top:auto;left:12px;font-size:12.5px;padding:8px 12px}
     .leaflet-control-layers{font-size:12px}
+    #locateBtn{bottom:70px;right:12px;}
   }
 </style>
 </head>
 <body>
 
+<div id="login-overlay">
+  <div class="login-box">
+    <h2>🔒 广西饲料厂地图登录</h2>
+    <div class="login-err" id="loginErr">账号或密码错误</div>
+    <input type="text" id="username" placeholder="请输入账号" autocomplete="username">
+    <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
+    <button id="loginBtn">登录</button>
+  </div>
+</div>
+
 <div id="map"></div>
 
 <button id="openBtn">☰ 列表 / 筛选</button>
+<button id="locateBtn">📍 我的位置</button>
+<button id="logoutBtn">退出登录</button>
 
 <div id="panel">
   <div class="head">
@@ -130,7 +179,7 @@
 <div id="boot">
   <div>
     <div class="spin"></div>
-    <div>正在加载数据 …</div>
+    <div>正在从数据库加载数据 …</div>
   </div>
 </div>
 
@@ -138,10 +187,18 @@
 /* ==========================================================
    配置区
    ========================================================== */
-const CENTER = [23.6, 108.4];   // 初始地图中心
-const ZOOM   = 7;               // 初始缩放
+const CENTER = [23.6, 108.4];
+const ZOOM   = 7;
 
-// 每个城市一个颜色，按需增删
+// 广西大致边界：纬度约 20.8 ~ 26.5，经度约 104.0 ~ 112.5
+const GUANGXI_BOUNDS = [[20.8, 104.0], [26.5, 112.5]];
+
+// ✅ 已填入你提供的 Publishable Key（代替旧的 Anon Key）
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nUgM8xgcQZ6CHsv8rMrmDA_mk9l7GTr';
+
+// ✅ 已根据你的要求更新为新的 API 地址
+const SUPABASE_API_URL = 'https://ggrokeytvagihlsejykl.supabase.co/rest/v1/guangxi-Feed-factory';
+
 const CITY_COLOR = {
   '南宁市':'#e74c3c','桂林市':'#3498db','玉林市':'#e67e22','贵港市':'#16a085',
   '钦州市':'#9b59b6','柳州市':'#27ae60','北海市':'#0ea5e9','贺州市':'#eab308',
@@ -150,16 +207,17 @@ const CITY_COLOR = {
 };
 const DEFAULT_COLOR = '#64748b';
 
-// 数据源：优先 data.csv，读不到就用 data.json
-const DATA_SOURCES = [
-  { url:'data.csv',  type:'csv'  },
-  { url:'data.json', type:'json' }
-];
-
 /* ==========================================================
-   1. 地图底图
+   1. 地图底图（已增加广西边界限制）
    ========================================================== */
-const map = L.map('map', { zoomControl:false, preferCanvas:true }).setView(CENTER, ZOOM);
+const map = L.map('map', { 
+  zoomControl: false, 
+  preferCanvas: true,
+  maxBounds: GUANGXI_BOUNDS,
+  maxBoundsViscosity: 1.0,
+  minZoom: 6
+}).setView(CENTER, ZOOM);
+
 L.control.zoom({ position:'bottomright' }).addTo(map);
 
 const amapVec = L.tileLayer(
@@ -179,16 +237,15 @@ L.control.layers(
 ).addTo(map);
 
 /* ==========================================================
-   2. 数据读取与解析
+   2. 数据读取与解析 (已对接 Supabase API)
    ========================================================== */
 const activeLayer = L.layerGroup().addTo(map);
 const markerById  = {};
 let DATA = [];
 let citySel = null, keyword = '', counts = {};
 
-// 列名别名表 —— 自动识别中英文表头
 const FIELD_ALIASES = {
-  id:       ['id','编号'],
+  id:       ['id'],
   city:     ['city','城市','市'],
   county:   ['county','区县','县','区'],
   address:  ['address','地址','详细地址'],
@@ -214,90 +271,64 @@ function headerToField(h){
   return null;
 }
 
-// —— CSV 解析（支持双引号包裹、逗号、换行）——
-function parseCSV(text){
-  const rows = [];
-  let row = [], field = '', inQ = false;
-  for(let i=0;i<text.length;i++){
-    const c = text[i];
-    if(inQ){
-      if(c === '"'){
-        if(text[i+1] === '"'){ field += '"'; i++; }
-        else inQ = false;
-      } else field += c;
-    } else {
-      if(c === '"') inQ = true;
-      else if(c === ','){ row.push(field); field = ''; }
-      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
-      else if(c === '\r'){ /* skip */ }
-      else field += c;
-    }
-  }
-  if(field !== '' || row.length){ row.push(field); rows.push(row); }
-  return rows.filter(r => r.some(f => String(f).trim() !== ''));
-}
-
-function csvToObjects(rows){
-  if(!rows.length) return [];
-  const headers = rows[0].map(headerToField);
-  return rows.slice(1).map(r => {
-    const o = {};
-    headers.forEach((f,i) => { if(f) o[f] = String(r[i] == null ? '' : r[i]).trim(); });
-    return o;
-  });
-}
-
-// 统一成内部结构
 function normalize(o){
-  let lng = parseFloat(o.lng);
-  let lat = parseFloat(o.lat);
-  if((isNaN(lng) || isNaN(lat)) && o.coord){
-    const m = String(o.coord).match(/(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)/);
+  const mapped = {};
+  for (const key in o) {
+    const field = headerToField(key);
+    if (field) mapped[field] = o[key];
+  }
+
+  let lng = parseFloat(mapped.lng);
+  let lat = parseFloat(mapped.lat);
+  if((isNaN(lng) || isNaN(lat)) && mapped.coord){
+    const m = String(mapped.coord).match(/(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)/);
     if(m){ lng = parseFloat(m[1]); lat = parseFloat(m[2]); }
   }
-  const capRaw = String(o.capacity == null ? '' : o.capacity).replace(/[^\d.\-]/g,'');
+  const capRaw = String(mapped.capacity == null ? '' : mapped.capacity).replace(/[^\d.\-]/g,'');
   const capacity = capRaw === '' ? null : Number(capRaw);
 
   return {
-    id:       o.id || ('row-' + Math.random().toString(36).slice(2,8)),
-    name:     o.name || '未命名',
-    city:     o.city || '其他',
-    county:   o.county || '',
-    address:  o.address || '',
-    abbr:     o.abbr || '',
-    group:    o.group || '',
+    id:       mapped.id || ('row-' + Math.random().toString(36).slice(2,8)),
+    name:     mapped.name || '未命名',
+    city:     mapped.city || '其他',
+    county:   mapped.county || '',
+    address:  mapped.address || '',
+    abbr:     mapped.abbr || '',
+    group:    mapped.group || '',
     capacity: (capacity == null || isNaN(capacity)) ? null : capacity,
     lng, lat
   };
 }
 
 const isValid = d => d && isFinite(d.lng) && isFinite(d.lat) &&
-                     d.lng > 60 && d.lng < 140 && d.lat > 3 && d.lat < 55;
+                     d.lng > 104 && d.lng < 113 && d.lat > 20 && d.lat < 27;
 
 async function loadData(){
-  let lastErr = null;
-  for(const src of DATA_SOURCES){
-    try{
-      const res = await fetch(src.url, { cache:'no-store' });
-      if(!res.ok) continue;
-      let text = await res.text();
-      text = text.replace(/^\uFEFF/, '');   // 去掉 Excel 的 BOM
-      let list;
-      if(src.type === 'csv'){
-        list = csvToObjects(parseCSV(text));
-      }else{
-        const j = JSON.parse(text);
-        list = Array.isArray(j) ? j : (j.data || []);
+  try {
+    const res = await fetch(SUPABASE_API_URL, {
+      headers: {
+        'apikey': SUPABASE_PUBLISHABLE_KEY,
+        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+        'Content-Type': 'application/json'
       }
-      const out = list.map(normalize).filter(isValid);
-      if(out.length) return out;
-    }catch(e){ lastErr = e; }
+    });
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`API 请求失败 (${res.status}): ${errText}`);
+    }
+    const list = await res.json();
+    const rawList = Array.isArray(list) ? list : (list.data || []);
+
+    const out = rawList.map(normalize).filter(isValid);
+    if(out.length) return out;
+    throw new Error('API 返回数据为空或格式不正确');
+  } catch(e) {
+    throw e;
   }
-  throw lastErr || new Error('没有找到可用的 data.csv 或 data.json');
 }
 
 /* ==========================================================
-   3. 画点
+   3. 画点与渲染
    ========================================================== */
 function radiusOf(cap){
   if(cap == null || cap <= 0) return 4.5;
@@ -344,7 +375,7 @@ function buildMarkers(){
 }
 
 /* ==========================================================
-   4. 侧边栏
+   4. 侧边栏与交互
    ========================================================== */
 const listEl  = document.getElementById('list');
 const chipsEl = document.getElementById('chips');
@@ -448,38 +479,113 @@ document.getElementById('closeBtn').onclick = () => togglePanel(false);
 openBtn.onclick = () => togglePanel(true);
 
 /* ==========================================================
-   5. 启动
+   5. 定位我的位置
    ========================================================== */
-function showBootError(err){
-  document.getElementById('boot').innerHTML =
-    '<div style="max-width:440px">'
-    + '<div style="font-size:32px;margin-bottom:10px">⚠️</div>'
-    + '<div style="color:#0f172a;font-weight:600;margin-bottom:8px">数据加载失败</div>'
-    + '<div style="font-size:12.5px;color:#64748b">'
-    + esc(err.message) + '<br><br>'
-    + '请确认 <code>data.csv</code> 与 <code>index.html</code> 在同一目录，<br>'
-    + '并通过 <b>http(s)://</b> 访问（直接双击本地文件会被浏览器拦截）。'
-    + '</div></div>';
+const locateBtn = document.getElementById('locateBtn');
+let userMarker = null;
+let userAccuracyCircle = null;
+
+locateBtn.onclick = () => {
+  map.locate({ setView: true, maxZoom: 15 });
+  locateBtn.textContent = '📍 定位中...';
+  locateBtn.disabled = true;
+};
+
+map.on('locationfound', (e) => {
+  locateBtn.textContent = '📍 我的位置';
+  locateBtn.disabled = false;
+
+  if (userMarker) map.removeLayer(userMarker);
+  if (userAccuracyCircle) map.removeLayer(userAccuracyCircle);
+
+  userAccuracyCircle = L.circle(e.latlng, e.accuracy, {
+    color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.15, weight: 1
+  }).addTo(map);
+
+  userMarker = L.circleMarker(e.latlng, {
+    radius: 8, color: '#fff', weight: 2, fillColor: '#0ea5e9', fillOpacity: 1
+  }).addTo(map);
+
+  userMarker.bindPopup('<b>📍 我的位置</b><br>精度：' + Math.round(e.accuracy) + ' 米').openPopup();
+});
+
+map.on('locationerror', (e) => {
+  locateBtn.textContent = '📍 我的位置';
+  locateBtn.disabled = false;
+  alert('无法获取您的位置：' + e.message + '\n请确保您已允许浏览器获取位置权限，且网络环境支持。');
+});
+
+/* ==========================================================
+   6. 登录逻辑
+   ========================================================== */
+const loginOverlay = document.getElementById('login-overlay');
+const loginErr = document.getElementById('loginErr');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+
+const VALID_USER = 'DHLY-maoyi';
+const VALID_PASS = '12345678y';
+
+function startApp() {
+  loginOverlay.style.display = 'none';
+  logoutBtn.style.display = 'block';
+  document.getElementById('boot').classList.remove('hide');
+  
+  (async function boot(){
+    try{
+      DATA = await loadData();
+      document.getElementById('boot').classList.add('hide');
+      totalEl.textContent = DATA.length;
+
+      buildMarkers();
+      buildChips();
+      render();
+
+      map.fitBounds(L.latLngBounds(DATA.map(d => [d.lat, d.lng])),
+                     { padding:[40,40], maxZoom:10 });
+
+      if(window.innerWidth <= 760) togglePanel(false);
+    }catch(err){
+      document.getElementById('boot').innerHTML = 
+        '<div style="max-width:440px">'
+        + '<div style="font-size:32px;margin-bottom:10px">⚠️</div>'
+        + '<div style="color:#0f172a;font-weight:600;margin-bottom:8px">数据加载失败</div>'
+        + '<div style="font-size:12.5px;color:#64748b">'
+        + esc(err.message) + '<br><br>'
+        + '请确认 Supabase 表名、Publishable Key 是否正确，并已配置 RLS 允许读取。'
+        + '</div></div>';
+    }
+  })();
 }
 
-(async function boot(){
-  try{
-    DATA = await loadData();
-    document.getElementById('boot').classList.add('hide');
-    totalEl.textContent = DATA.length;
-
-    buildMarkers();
-    buildChips();
-    render();
-
-    map.fitBounds(L.latLngBounds(DATA.map(d => [d.lat, d.lng])),
-                   { padding:[40,40], maxZoom:10 });
-
-    if(window.innerWidth <= 760) togglePanel(false);
-  }catch(err){
-    showBootError(err);
+loginBtn.onclick = () => {
+  const user = document.getElementById('username').value.trim();
+  const pass = document.getElementById('password').value;
+  
+  if (user === VALID_USER && pass === VALID_PASS) {
+    sessionStorage.setItem('logged_in', 'true');
+    loginErr.style.display = 'none';
+    startApp();
+  } else {
+    loginErr.style.display = 'block';
   }
-})();
+};
+
+document.getElementById('password').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loginBtn.click();
+});
+document.getElementById('username').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loginBtn.click();
+});
+
+logoutBtn.onclick = () => {
+  sessionStorage.removeItem('logged_in');
+  location.reload();
+};
+
+if (sessionStorage.getItem('logged_in') === 'true') {
+  startApp();
+}
 </script>
 </body>
 </html>
