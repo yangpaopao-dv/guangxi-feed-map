@@ -7,6 +7,8 @@
 <title>广西饲料厂分布地图</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- 引入 Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;overflow:hidden;
@@ -90,7 +92,6 @@
         border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 12px}
   @keyframes sp{to{transform:rotate(360deg)}}
 
-  /* 登录界面样式 */
   #login-overlay{
     position:absolute;inset:0;z-index:3000;display:flex;
     align-items:center;justify-content:center;background:#f1f5f9;
@@ -112,7 +113,6 @@
   .login-box button:hover{background:#1e293b;}
   .login-err{color:#e74c3c;font-size:12px;margin-bottom:10px;display:none;text-align:center;}
 
-  /* 定位按钮和退出按钮样式 */
   #locateBtn{
     position:absolute;bottom:80px;right:10px;z-index:1000;
     padding:10px;border:none;border-radius:10px;cursor:pointer;
@@ -152,7 +152,7 @@
   <div class="login-box">
     <h2>🔒 广西饲料厂地图登录</h2>
     <div class="login-err" id="loginErr">账号或密码错误</div>
-    <input type="text" id="username" placeholder="请输入账号" autocomplete="username">
+    <input type="text" id="username" placeholder="请输入账号" autocomplete="username" value="DHLY-maoyi">
     <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
     <button id="loginBtn">登录</button>
   </div>
@@ -189,15 +189,20 @@
    ========================================================== */
 const CENTER = [23.6, 108.4];
 const ZOOM   = 7;
-
-// 广西大致边界：纬度约 20.8 ~ 26.5，经度约 104.0 ~ 112.5
+// 广西大致边界
 const GUANGXI_BOUNDS = [[20.8, 104.0], [26.5, 112.5]];
 
-// ✅ 已填入你提供的 Publishable Key（代替旧的 Anon Key）
+// ✅ Supabase 配置
+const SUPABASE_URL = 'https://ggrokeytvagihlsejykl.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nUgM8xgcQZ6CHsv8rMrmDA_mk9l7GTr';
+const SUPABASE_API_TABLE = 'guangxi-feed-factory'; // 表名（全小写）
 
-// ✅ 已根据你的要求更新为新的 API 地址
-const SUPABASE_API_URL = 'https://ggrokeytvagihlsejykl.supabase.co/rest/v1/guangxi-Feed-factory';
+// 登录账号映射
+const LOGIN_ALIAS = 'DHLY-maoyi';
+const REAL_EMAIL = 'yangtongwei@cn.wilmar-intl.com';
+
+// 初始化 Supabase 客户端
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const CITY_COLOR = {
   '南宁市':'#e74c3c','桂林市':'#3498db','玉林市':'#e67e22','贵港市':'#16a085',
@@ -208,7 +213,7 @@ const CITY_COLOR = {
 const DEFAULT_COLOR = '#64748b';
 
 /* ==========================================================
-   1. 地图底图（已增加广西边界限制）
+   1. 地图底图
    ========================================================== */
 const map = L.map('map', { 
   zoomControl: false, 
@@ -237,7 +242,7 @@ L.control.layers(
 ).addTo(map);
 
 /* ==========================================================
-   2. 数据读取与解析 (已对接 Supabase API)
+   2. 数据读取与解析
    ========================================================== */
 const activeLayer = L.layerGroup().addTo(map);
 const markerById  = {};
@@ -246,16 +251,16 @@ let citySel = null, keyword = '', counts = {};
 
 const FIELD_ALIASES = {
   id:       ['id'],
-  city:     ['city','城市','市'],
-  county:   ['county','区县','县','区'],
-  address:  ['address','地址','详细地址'],
-  coord:    ['latitude and longitude','latlng','coordinate','coordinates','经纬度','坐标'],
+  city:     ['city'],
+  county:   ['county'],
+  address:  ['address','Address','详细地址'],
+  coord:    ['latitude and longitude','latitudeandlongitude','经纬度','坐标'],
   lng:      ['lng','lon','longitude','经度'],
   lat:      ['lat','latitude','纬度'],
-  name:     ['name','厂名','企业名称','公司名称','公司','饲料厂名称'],
-  abbr:     ['abbreviation','abbr','简称'],
-  group:    ['group_name','group','归属','集团','所属集团','母公司'],
-  capacity: ['capacity','产能','年产能','设计产能','万吨']
+  name:     ['name'],
+  abbr:     ['abbreviation'],
+  group:    ['group_name','Group_name'],
+  capacity: ['capacity']
 };
 
 function headerKey(s){
@@ -280,10 +285,12 @@ function normalize(o){
 
   let lng = parseFloat(mapped.lng);
   let lat = parseFloat(mapped.lat);
+  
   if((isNaN(lng) || isNaN(lat)) && mapped.coord){
     const m = String(mapped.coord).match(/(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)/);
     if(m){ lng = parseFloat(m[1]); lat = parseFloat(m[2]); }
   }
+  
   const capRaw = String(mapped.capacity == null ? '' : mapped.capacity).replace(/[^\d.\-]/g,'');
   const capacity = capRaw === '' ? null : Number(capRaw);
 
@@ -305,23 +312,22 @@ const isValid = d => d && isFinite(d.lng) && isFinite(d.lat) &&
 
 async function loadData(){
   try {
-    const res = await fetch(SUPABASE_API_URL, {
-      headers: {
-        'apikey': SUPABASE_PUBLISHABLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`API 请求失败 (${res.status}): ${errText}`);
-    }
-    const list = await res.json();
-    const rawList = Array.isArray(list) ? list : (list.data || []);
+    // 使用 Supabase 官方 SDK 查询，请求会自动携带当前登录用户的 JWT Token
+    const { data, error } = await supabase
+      .from(SUPABASE_API_TABLE)
+      .select('*');
 
-    const out = rawList.map(normalize).filter(isValid);
+    if (error) {
+        throw new Error(`Supabase 查询失败：${error.message}`);
+    }
+    if (!data || !Array.isArray(data)) {
+        throw new Error(`API 返回数据格式不正确`);
+    }
+
+    const out = data.map(normalize).filter(isValid);
     if(out.length) return out;
-    throw new Error('API 返回数据为空或格式不正确');
+    
+    throw new Error(`API 返回了 ${data.length} 条数据，但没有一条符合广西坐标范围。请检查数据库里经纬度是否正确。`);
   } catch(e) {
     throw e;
   }
@@ -516,15 +522,12 @@ map.on('locationerror', (e) => {
 });
 
 /* ==========================================================
-   6. 登录逻辑
+   6. 登录与鉴权逻辑 (Supabase Auth)
    ========================================================== */
 const loginOverlay = document.getElementById('login-overlay');
 const loginErr = document.getElementById('loginErr');
 const loginBtn = document.getElementById('loginBtn');
 const logoutBtn = document.getElementById('logoutBtn');
-
-const VALID_USER = 'DHLY-maoyi';
-const VALID_PASS = '12345678y';
 
 function startApp() {
   loginOverlay.style.display = 'none';
@@ -552,22 +555,48 @@ function startApp() {
         + '<div style="color:#0f172a;font-weight:600;margin-bottom:8px">数据加载失败</div>'
         + '<div style="font-size:12.5px;color:#64748b">'
         + esc(err.message) + '<br><br>'
-        + '请确认 Supabase 表名、Publishable Key 是否正确，并已配置 RLS 允许读取。'
+        + '请确认您已在 Supabase 创建了该用户，并配置了允许 authenticated 角色读取的 RLS 策略。'
         + '</div></div>';
     }
   })();
 }
 
-loginBtn.onclick = () => {
+loginBtn.onclick = async () => {
   const user = document.getElementById('username').value.trim();
   const pass = document.getElementById('password').value;
   
-  if (user === VALID_USER && pass === VALID_PASS) {
-    sessionStorage.setItem('logged_in', 'true');
-    loginErr.style.display = 'none';
-    startApp();
-  } else {
+  if (!user || !pass) {
+      loginErr.textContent = '请输入账号和密码';
+      loginErr.style.display = 'block';
+      return;
+  }
+
+  // ✅ 核心修改：自动把前端输入的 DHLY-maoyi 映射为真实的企业邮箱
+  let email = user;
+  if (user === LOGIN_ALIAS) {
+      email = REAL_EMAIL;
+  }
+
+  loginBtn.disabled = true;
+  loginBtn.textContent = '登录中...';
+  loginErr.style.display = 'none';
+
+  // 使用 Supabase Auth 验证
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email,
+    password: pass,
+  });
+
+  loginBtn.disabled = false;
+  loginBtn.textContent = '登录';
+
+  if (error) {
+    loginErr.textContent = '账号或密码错误';
     loginErr.style.display = 'block';
+    console.error('Supabase 登录错误:', error.message);
+  } else {
+    // 登录成功，开始加载地图数据
+    startApp();
   }
 };
 
@@ -578,14 +607,21 @@ document.getElementById('username').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loginBtn.click();
 });
 
-logoutBtn.onclick = () => {
-  sessionStorage.removeItem('logged_in');
+logoutBtn.onclick = async () => {
+  await supabase.auth.signOut();
   location.reload();
 };
 
-if (sessionStorage.getItem('logged_in') === 'true') {
-  startApp();
+// 页面启动时检查是否已有 Supabase 会话（例如刷新页面）
+async function checkSession() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    startApp();
+  }
 }
+
+checkSession();
+
 </script>
 </body>
 </html>
