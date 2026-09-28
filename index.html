@@ -7,8 +7,14 @@
 <title>广西饲料厂分布地图</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- 引入 Supabase JS SDK -->
+<!-- 引入 Supabase JS SDK，使用备用 CDN 提高国内加载成功率 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // 备用 CDN 检测：如果 jsdelivr 失败，自动切换到 bootcdn
+  if (!window.supabase) {
+      document.write('<script src="https://cdn.bootcdn.net/ajax/libs/supabase-js/2.39.3/supabase.min.js"><\/script>');
+  }
+</script>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;overflow:hidden;
@@ -111,6 +117,7 @@
     border-radius:8px;font-size:14px;cursor:pointer;font-weight:500;
   }
   .login-box button:hover{background:#1e293b;}
+  .login-box button:disabled{background:#94a3b8;cursor:not-allowed;}
   .login-err{color:#e74c3c;font-size:12px;margin-bottom:10px;display:none;text-align:center;}
 
   #locateBtn{
@@ -189,20 +196,33 @@
    ========================================================== */
 const CENTER = [23.6, 108.4];
 const ZOOM   = 7;
-// 广西大致边界
 const GUANGXI_BOUNDS = [[20.8, 104.0], [26.5, 112.5]];
 
 // ✅ Supabase 配置
 const SUPABASE_URL = 'https://ggrokeytvagihlsejykl.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nUgM8xgcQZ6CHsv8rMrmDA_mk9l7GTr';
-const SUPABASE_API_TABLE = 'guangxi-feed-factory'; // 表名（全小写）
+const SUPABASE_API_TABLE = 'guangxi-feed-factory';
 
-// 登录账号映射
+// 账号映射（前端输入 DHLY-maoyi -> 映射为 QQ 邮箱）
 const LOGIN_ALIAS = 'DHLY-maoyi';
-const REAL_EMAIL = 'yangtongwei@cn.wilmar-intl.com';
+const REAL_EMAIL = '2754124753@qq.com';
 
-// 初始化 Supabase 客户端
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+let supabaseClient = null;
+
+// 安全的初始化逻辑
+function initSupabase() {
+    if (!window.supabase) {
+        console.error('Supabase SDK 未加载！请检查网络或 CDN。');
+        return false;
+    }
+    try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+        return true;
+    } catch (e) {
+        console.error('Supabase 初始化失败:', e);
+        return false;
+    }
+}
 
 const CITY_COLOR = {
   '南宁市':'#e74c3c','桂林市':'#3498db','玉林市':'#e67e22','贵港市':'#16a085',
@@ -311,23 +331,24 @@ const isValid = d => d && isFinite(d.lng) && isFinite(d.lat) &&
                      d.lng > 104 && d.lng < 113 && d.lat > 20 && d.lat < 27;
 
 async function loadData(){
+  if (!supabaseClient) throw new Error('Supabase 客户端未初始化');
+
   try {
-    // 使用 Supabase 官方 SDK 查询，请求会自动携带当前登录用户的 JWT Token
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from(SUPABASE_API_TABLE)
       .select('*');
 
     if (error) {
-        throw new Error(`Supabase 查询失败：${error.message}`);
+        throw new Error(`数据库查询失败: ${error.message}`);
     }
     if (!data || !Array.isArray(data)) {
-        throw new Error(`API 返回数据格式不正确`);
+        throw new Error('数据库返回数据格式不正确');
     }
 
     const out = data.map(normalize).filter(isValid);
     if(out.length) return out;
     
-    throw new Error(`API 返回了 ${data.length} 条数据，但没有一条符合广西坐标范围。请检查数据库里经纬度是否正确。`);
+    throw new Error(`数据库返回了 ${data.length} 条数据，但没有一条符合广西坐标范围。请检查数据库里经纬度是否正确。`);
   } catch(e) {
     throw e;
   }
@@ -522,7 +543,7 @@ map.on('locationerror', (e) => {
 });
 
 /* ==========================================================
-   6. 登录与鉴权逻辑 (Supabase Auth)
+   6. 登录与鉴权逻辑 (健壮版)
    ========================================================== */
 const loginOverlay = document.getElementById('login-overlay');
 const loginErr = document.getElementById('loginErr');
@@ -561,45 +582,70 @@ function startApp() {
   })();
 }
 
-loginBtn.onclick = async () => {
+// 绑定登录事件（使用 addEventListener 防止重复绑定，配合 try-catch 提高健壮性）
+loginBtn.addEventListener('click', async () => {
   const user = document.getElementById('username').value.trim();
   const pass = document.getElementById('password').value;
   
+  loginErr.style.display = 'none';
+
   if (!user || !pass) {
       loginErr.textContent = '请输入账号和密码';
       loginErr.style.display = 'block';
       return;
   }
 
-  // ✅ 核心修改：自动把前端输入的 DHLY-maoyi 映射为真实的企业邮箱
+  // 自动映射账号到 QQ 邮箱
   let email = user;
   if (user === LOGIN_ALIAS) {
       email = REAL_EMAIL;
   }
+  
+  console.log('🔐 尝试登录，账号:', user, ' 映射邮箱:', email);
 
   loginBtn.disabled = true;
   loginBtn.textContent = '登录中...';
-  loginErr.style.display = 'none';
 
-  // 使用 Supabase Auth 验证
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email,
-    password: pass,
-  });
+  try {
+    // 健壮性检查 1：CDN 是否成功加载
+    if (!supabaseClient) {
+        throw new Error('Supabase SDK 加载失败，请检查网络或刷新页面重试。');
+    }
 
-  loginBtn.disabled = false;
-  loginBtn.textContent = '登录';
+    // 发起登录请求
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email: email,
+      password: pass,
+    });
 
-  if (error) {
-    loginErr.textContent = '账号或密码错误';
-    loginErr.style.display = 'block';
-    console.error('Supabase 登录错误:', error.message);
-  } else {
-    // 登录成功，开始加载地图数据
+    // 健壮性检查 2：Supabase 返回了错误
+    if (error) {
+      console.error('❌ Supabase 登录错误:', error);
+      if (error.message.includes('Invalid login credentials')) {
+        throw new Error('账号或密码错误。请检查 Supabase 用户设置。');
+      } else if (error.message.includes('Email not confirmed')) {
+        throw new Error('邮箱未确认。请去 Supabase 后台确认用户或关闭邮箱验证。');
+      } else {
+        throw new Error(error.message);
+      }
+    }
+
+    // 登录成功
+    console.log('✅ 登录成功，会话信息已获取');
     startApp();
-  }
-};
 
+  } catch (err) {
+    console.error('⚠️ 登录异常:', err);
+    loginErr.textContent = err.message || '网络异常，请稍后重试';
+    loginErr.style.display = 'block';
+  } finally {
+    // 无论成功还是失败，最后都恢复按钮状态
+    loginBtn.disabled = false;
+    loginBtn.textContent = '登录';
+  }
+});
+
+// 支持回车键登录
 document.getElementById('password').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loginBtn.click();
 });
@@ -608,19 +654,35 @@ document.getElementById('username').addEventListener('keydown', (e) => {
 });
 
 logoutBtn.onclick = async () => {
-  await supabase.auth.signOut();
+  if (supabaseClient) {
+    await supabaseClient.auth.signOut();
+  }
   location.reload();
 };
 
 // 页面启动时检查是否已有 Supabase 会话（例如刷新页面）
 async function checkSession() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    startApp();
+  if (!initSupabase()) {
+      console.error('Supabase 初始化失败，无法检查会话。');
+      return;
+  }
+  try {
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    if (error) {
+        console.error('获取会话失败:', error);
+        return;
+    }
+    if (session) {
+      console.log('🔄 检测到已有登录会话，自动进入地图');
+      startApp();
+    }
+  } catch (e) {
+    console.error('检查会话异常:', e);
   }
 }
 
-checkSession();
+// 确保 DOM 加载完毕后再执行会话检查
+window.addEventListener('DOMContentLoaded', checkSession);
 
 </script>
 </body>
