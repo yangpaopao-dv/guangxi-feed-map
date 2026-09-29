@@ -7,7 +7,6 @@
 <title>广西饲料厂与码头分布地图</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- 引入 Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
   if (!window.supabase) {
@@ -75,7 +74,6 @@
   .btn-edit { background: #e0e7ff; color: #1e3a8a; }
   .btn-del { background: #fee2e2; color: #991b1b; }
 
-  /* 模态框（编辑表单） */
   #editModal { position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 5000; display: none; align-items: center; justify-content: center; }
   .modal-box { background: #fff; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
   .modal-box h3 { margin: 0 0 15px; font-size: 16px; }
@@ -177,9 +175,9 @@ const SUPABASE_URL = 'https://ggrokeytvagihlsejykl.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nUgM8xgcQZ6CHsv8rMrmDA_mk9l7GTr';
 // 🌟 使用你提供的两个 REST API 端点对应的表名
 const TABLE_FACTORY = 'guangxi-Feed factory'; 
-const TABLE_PORT = 'dock';
+const TABLE_PORT = 'dock'; // 修改为 dock
 
-// 🌟 管理员邮箱（只有这个邮箱登录后才显示编辑/新增/删除按钮）
+// 🌟 管理员邮箱
 const ADMIN_EMAILS = ['2754124753@qq.com'];
 
 let supabaseClient = null;
