@@ -4,10 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0f172a">
-<title>广西饲料厂分布地图</title>
+<title>广西饲料厂与码头分布地图</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- 引入 Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
   if (!window.supabase) {
@@ -16,137 +15,99 @@
 </script>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;height:100%;overflow:hidden;
-    font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif}
   #map{position:absolute;inset:0;background:#eef2f5}
+  .custom-location-icon svg { filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.4)); }
 
-  /* 个人位置白色三角符号样式 */
-  .custom-location-icon svg {
-      filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.4));
-  }
-
-  #panel{
-    position:absolute;top:10px;left:10px;bottom:10px;width:352px;z-index:1000;
-    background:rgba(255,255,255,.97);backdrop-filter:blur(8px);
-    border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.20);
-    display:flex;flex-direction:column;overflow:hidden;
-    transition:transform .28s ease, opacity .28s ease;
-  }
+  #panel{position:absolute;top:10px;left:10px;bottom:10px;width:352px;z-index:1000;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.20);display:flex;flex-direction:column;overflow:hidden;transition:transform .28s ease, opacity .28s ease;}
   #panel.hide{transform:translateX(-380px);opacity:0;pointer-events:none}
 
   .head{padding:13px 15px 9px;border-bottom:1px solid #eef1f4;position:relative}
   .head h1{margin:0;font-size:15.5px;letter-spacing:.4px;color:#0f172a}
   .head .sub{margin-top:4px;font-size:11.5px;color:#64748b}
   .head .sub b{color:#e74c3c;font-variant-numeric:tabular-nums}
-  #closeBtn{
-    position:absolute;top:11px;right:12px;width:26px;height:26px;border:none;
-    border-radius:8px;background:#f1f5f9;color:#64748b;font-size:15px;
-    cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;
-  }
+  #closeBtn{position:absolute;top:11px;right:12px;width:26px;height:26px;border:none;border-radius:8px;background:#f1f5f9;color:#64748b;font-size:15px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;}
   #closeBtn:hover{background:#e2e8f0}
 
-  #q{margin:9px 14px 0;padding:8px 11px;font-size:13px;border:1px solid #dbe2e8;
-     border-radius:9px;outline:none;background:#f8fafc;color:#0f172a}
+  #q{margin:9px 14px 0;padding:8px 11px;font-size:13px;border:1px solid #dbe2e8;border-radius:9px;outline:none;background:#f8fafc;color:#0f172a}
   #q:focus{border-color:#94a3b8;background:#fff}
 
-  .chips{display:flex;flex-wrap:wrap;gap:5px;padding:9px 14px 5px;
-         max-height:82px;overflow-y:auto}
-  .chip{font-size:11.5px;padding:3px 9px;border-radius:999px;cursor:pointer;
-        background:#f1f5f9;color:#475569;border:1px solid transparent;
-        user-select:none;white-space:nowrap;transition:.15s}
-  .chip:hover{background:#e2e8f0}
-  .chip.on{background:#0f172a;color:#fff;border-color:#0f172a}
+  .type-tabs{display:flex;gap:6px;padding:9px 14px 0;}
+  .type-tab{flex:1;text-align:center;font-size:12px;padding:6px;border-radius:8px;background:#f1f5f9;color:#475569;cursor:pointer;font-weight:500;transition:.2s;}
+  .type-tab:hover{background:#e2e8f0;}
+  .type-tab.on{background:#0f172a;color:#fff;}
+
+  .chips{display:flex;flex-wrap:wrap;gap:5px;padding:9px 14px 5px;max-height:82px;overflow-y:auto;}
+  .chip{font-size:11.5px;padding:3px 9px;border-radius:999px;cursor:pointer;background:#f1f5f9;color:#475569;border:1px solid transparent;user-select:none;white-space:nowrap;transition:.15s;}
+  .chip:hover{background:#e2e8f0;}
+  .chip.on{background:#0f172a;color:#fff;border-color:#0f172a;}
 
   .list{flex:1;overflow-y:auto;padding:5px 8px 12px;-webkit-overflow-scrolling:touch}
-  .item{display:flex;align-items:center;gap:9px;padding:8px 7px;
-        border-radius:9px;cursor:pointer;transition:background .12s}
-  .item:hover{background:#f1f5f9}
-  .item.sel{background:#e0ecff}
-  .dot{width:10px;height:10px;border-radius:50%;flex:none;
-       box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(0,0,0,.07)}
+  .item{display:flex;align-items:center;gap:9px;padding:8px 7px;border-radius:9px;cursor:pointer;transition:background .12s;}
+  .item:hover{background:#f1f5f9;}
+  .item.sel{background:#e0ecff;}
+  .dot{width:10px;height:10px;flex:none;box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(0,0,0,.07);}
+  .dot.circle{border-radius:50%;}
+  .dot.square{border-radius:2px; background-color: #1e3a8a !important;}
+  
   .it-main{flex:1;min-width:0}
-  .it-name{font-size:12.5px;color:#0f172a;line-height:1.35;
-           overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .it-sub{font-size:11px;color:#8a95a4;margin-top:2px;
-          overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .cap{font-size:11px;color:#0f766e;background:#ecfdf5;border-radius:6px;
-       padding:2px 6px;flex:none;font-variant-numeric:tabular-nums}
-  .cap.na{color:#94a3b8;background:#f1f5f9}
+  .it-name{font-size:12.5px;color:#0f172a;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .it-sub{font-size:11px;color:#8a95a4;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cap{font-size:11px;color:#0f766e;background:#ecfdf5;border-radius:6px;padding:2px 6px;flex:none;font-variant-numeric:tabular-nums;}
+  .cap.na{color:#94a3b8;background:#f1f5f9;}
 
-  .foot{padding:7px 14px 10px;font-size:10.5px;color:#a0aab5;
-        border-top:1px solid #eef1f4;line-height:1.6}
+  .foot{padding:7px 14px 10px;font-size:10.5px;color:#a0aab5;border-top:1px solid #eef1f4;line-height:1.6;}
+  #openBtn{position:absolute;top:10px;left:10px;z-index:1000;display:none;padding:9px 13px;border:none;border-radius:10px;cursor:pointer;background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.18);font-size:13px;color:#0f172a;font-weight:500;}
+  #openBtn.show{display:block;}
+  #addBtn{position:absolute;top:10px;right:10px;z-index:1000;display:none;padding:8px 14px;border:none;border-radius:8px;cursor:pointer;background:#16a34a;color:#fff;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(22,163,74,.4);}
+  #addBtn.show{display:block;}
 
-  #openBtn{
-    position:absolute;top:10px;left:10px;z-index:1000;display:none;
-    padding:9px 13px;border:none;border-radius:10px;cursor:pointer;
-    background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.18);
-    font-size:13px;color:#0f172a;font-weight:500;
-  }
-  #openBtn.show{display:block}
+  .pop{font-size:12.5px;min-width:236px;}
+  .pop-name{font-size:13.5px;font-weight:600;color:#0f172a;margin-bottom:7px;line-height:1.4;}
+  .pop table{width:100%;border-collapse:collapse;}
+  .pop td{padding:3px 0;vertical-align:top;color:#334155;line-height:1.5;}
+  .pop td:first-child{width:46px;color:#94a3b8;}
+  .leaflet-popup-content{margin:12px 14px;}
+  .leaflet-popup-content-wrapper{border-radius:12px;}
+  .pop-actions { margin-top: 10px; display: flex; gap: 8px; border-top: 1px dashed #e2e8f0; padding-top: 8px; }
+  .pop-actions button { flex: 1; padding: 4px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .btn-edit { background: #e0e7ff; color: #1e3a8a; }
+  .btn-del { background: #fee2e2; color: #991b1b; }
 
-  .pop{font-size:12.5px;min-width:236px}
-  .pop-name{font-size:13.5px;font-weight:600;color:#0f172a;margin-bottom:7px;line-height:1.4}
-  .pop table{width:100%;border-collapse:collapse}
-  .pop td{padding:3px 0;vertical-align:top;color:#334155;line-height:1.5}
-  .pop td:first-child{width:46px;color:#94a3b8}
-  .leaflet-popup-content{margin:12px 14px}
-  .leaflet-popup-content-wrapper{border-radius:12px}
+  /* 模态框（编辑表单） */
+  #editModal { position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 5000; display: none; align-items: center; justify-content: center; }
+  .modal-box { background: #fff; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
+  .modal-box h3 { margin: 0 0 15px; font-size: 16px; }
+  .form-group { margin-bottom: 10px; }
+  .form-group label { display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; }
+  .form-group input { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 15px; }
+  .modal-actions button { flex: 1; padding: 10px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+  .btn-save { background: #0f172a; color: #fff; }
+  .btn-cancel { background: #f1f5f9; color: #475569; }
 
-  #boot{position:absolute;inset:0;z-index:2000;display:flex;
-        align-items:center;justify-content:center;background:#f8fafc;
-        font-size:13px;color:#64748b;text-align:center;padding:24px;line-height:1.9}
-  #boot.hide{display:none}
-  #boot code{background:#eef2f7;padding:1px 6px;border-radius:5px;
-             font-size:12px;color:#0f172a}
-  .spin{width:26px;height:26px;border:2.5px solid #dbe4ee;border-top-color:#0f172a;
-        border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 12px}
+  #boot{position:absolute;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:#f8fafc;font-size:13px;color:#64748b;text-align:center;padding:24px;line-height:1.9;}
+  #boot.hide{display:none;}
+  .spin{width:26px;height:26px;border:2.5px solid #dbe4ee;border-top-color:#0f172a;border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 12px;}
   @keyframes sp{to{transform:rotate(360deg)}}
 
-  #login-overlay{
-    position:absolute;inset:0;z-index:3000;display:flex;
-    align-items:center;justify-content:center;background:#f1f5f9;
-  }
-  .login-box{
-    background:#fff;padding:30px;border-radius:16px;
-    box-shadow:0 10px 40px rgba(15,23,42,.1);width:90%;max-width:360px;
-  }
+  #login-overlay{position:absolute;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;background:#f1f5f9;}
+  .login-box{background:#fff;padding:30px;border-radius:16px;box-shadow:0 10px 40px rgba(15,23,42,.1);width:90%;max-width:360px;}
   .login-box h2{margin:0 0 20px 0;font-size:18px;color:#0f172a;text-align:center;}
-  .login-box input{
-    width:100%;padding:10px 12px;margin-bottom:12px;border:1px solid #cbd5e1;
-    border-radius:8px;font-size:14px;outline:none;transition:.2s;
-  }
-  .login-box input:focus{border-color:#0f172a;}
-  .login-box button{
-    width:100%;padding:10px;background:#0f172a;color:#fff;border:none;
-    border-radius:8px;font-size:14px;cursor:pointer;font-weight:500;
-  }
-  .login-box button:hover{background:#1e293b;}
-  .login-box button:disabled{background:#94a3b8;cursor:not-allowed;}
+  .login-box input{width:100%;padding:10px 12px;margin-bottom:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;outline:none;}
+  .login-box button{width:100%;padding:10px;background:#0f172a;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;}
   .login-err{color:#e74c3c;font-size:12px;margin-bottom:10px;display:none;text-align:center;}
 
-  #logoutBtn{
-    position:absolute;top:10px;right:10px;z-index:1000;
-    padding:8px 12px;border:none;border-radius:8px;cursor:pointer;
-    background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.18);
-    font-size:12px;color:#e74c3c;font-weight:500;display:none;
-  }
+  #logoutBtn{position:absolute;top:10px;right:10px;z-index:999;padding:8px 12px;border:none;border-radius:8px;cursor:pointer;background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.18);font-size:12px;color:#e74c3c;font-weight:500;display:none;}
 
   @media (max-width:760px){
-    #panel{
-      top:auto;left:0;right:0;bottom:0;width:auto;
-      height:58vh;max-height:520px;
-      border-radius:18px 18px 0 0;
-      padding-bottom:env(safe-area-inset-bottom);
-    }
-    #panel.hide{transform:translateY(105%);opacity:1}
-    #panel::before{
-      content:'';position:absolute;top:7px;left:50%;transform:translateX(-50%);
-      width:38px;height:4px;border-radius:99px;background:#d8dee6;
-    }
-    .head{padding-top:18px}
-    .chips{max-height:62px}
-    #openBtn{bottom:16px;top:auto;left:12px;font-size:12.5px;padding:8px 12px}
-    .leaflet-control-layers{font-size:12px}
+    #panel{top:auto;left:0;right:0;bottom:0;width:auto;height:58vh;max-height:520px;border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom);}
+    #panel.hide{transform:translateY(105%);opacity:1;}
+    #panel::before{content:'';position:absolute;top:7px;left:50%;transform:translateX(-50%);width:38px;height:4px;border-radius:99px;background:#d8dee6;}
+    .head{padding-top:18px;}
+    .chips{max-height:62px;}
+    #openBtn{bottom:16px;top:auto;left:12px;font-size:12.5px;padding:8px 12px;}
+    #addBtn{top:auto;bottom:16px;right:12px;}
   }
 </style>
 </head>
@@ -154,509 +115,383 @@
 
 <div id="login-overlay">
   <div class="login-box">
-    <h2>🔒 广西饲料厂地图登录</h2>
+    <h2>🔒 广西饲料厂与码头地图</h2>
     <div class="login-err" id="loginErr">账号或密码错误</div>
-    <input type="text" id="username" placeholder="请输入账号" autocomplete="username" value="DHLY-maoyi">
-    <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
+    <input type="text" id="username" placeholder="请输入账号" value="DHLY-maoyi">
+    <input type="password" id="password" placeholder="请输入密码">
     <button id="loginBtn">登录</button>
   </div>
 </div>
 
 <div id="map"></div>
-
 <button id="openBtn">☰ 列表 / 筛选</button>
+<button id="addBtn">➕ 新增地点</button>
 <button id="logoutBtn">退出登录</button>
 
 <div id="panel">
   <div class="head">
-    <h1>广西饲料厂分布图</h1>
-    <div class="sub">共 <b id="total">–</b> 家 · 圆点大小 = 年产能（万吨）</div>
+    <h1>广西饲料厂与码头分布图</h1>
+    <div class="sub">共 <b id="total">–</b> 个地点</div>
     <button id="closeBtn" title="收起">×</button>
   </div>
-  <input id="q" placeholder="搜索厂名 / 简称 / 集团 / 县区">
+  <div class="type-tabs">
+    <div class="type-tab on" data-type="all">全部</div>
+    <div class="type-tab" data-type="factory">饲料厂</div>
+    <div class="type-tab" data-type="port">码头</div>
+  </div>
+  <input id="q" placeholder="搜索名称 / 简称 / 集团 / 县区">
   <div class="chips" id="chips"></div>
   <div class="list" id="list"></div>
-  <div class="foot">点击列表定位 · 点击圆点看详情 · 右上角切换底图</div>
+  <div class="foot">点击列表定位 · 圆点=饲料厂 · 方块=码头</div>
 </div>
 
-<div id="boot">
-  <div>
-    <div class="spin"></div>
-    <div>正在从数据库加载数据 …</div>
+<!-- 编辑/新增模态框 -->
+<div id="editModal">
+  <div class="modal-box">
+    <h3 id="modalTitle">编辑地点</h3>
+    <input type="hidden" id="editId">
+    <input type="hidden" id="editType">
+    <div class="form-group"><label>名称</label><input type="text" id="editName"></div>
+    <div class="form-group"><label>城市</label><input type="text" id="editCity"></div>
+    <div class="form-group"><label>县区</label><input type="text" id="editCounty"></div>
+    <div class="form-group"><label>地址</label><input type="text" id="editAddress"></div>
+    <div class="form-group"><label>经度 (lng)</label><input type="number" step="any" id="editLng"></div>
+    <div class="form-group"><label>纬度 (lat)</label><input type="number" step="any" id="editLat"></div>
+    <div class="form-group" id="capGroup"><label>产能（万吨/年）</label><input type="number" step="any" id="editCapacity"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn-save" onclick="saveLocation()">保存</button>
+    </div>
   </div>
 </div>
 
-<script>
-/* ==========================================================
-   配置区
-   ========================================================== */
-const CENTER = [23.6, 108.4];
-const ZOOM   = 7;
-// 广西大致边界
-const GUANGXI_BOUNDS = [[20.5, 103.5], [26.8, 112.8]];
+<div id="boot"><div><div class="spin"></div><div>正在加载数据…</div></div></div>
 
-// ✅ Supabase 配置
+<script>
+/* ====================== 配置区 ====================== */
+const CENTER = [23.6, 108.4];
+const GUANGXI_BOUNDS = [[20.8, 104.2], [26.5, 112.2]];
+
 const SUPABASE_URL = 'https://ggrokeytvagihlsejykl.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nUgM8xgcQZ6CHsv8rMrmDA_mk9l7GTr';
-const SUPABASE_API_TABLE = 'guangxi-feed-factory';
+const TABLE_FACTORY = 'guangxi-feed-factory';
+const TABLE_PORT = 'guangxi-port';
 
-// 账号映射
-const LOGIN_ALIAS = 'DHLY-maoyi';
-const REAL_EMAIL = '2754124753@qq.com';
+// 🌟 管理员邮箱（只有这个邮箱登录后才显示编辑/新增/删除按钮）
+const ADMIN_EMAILS = ['2754124753@qq.com'];
 
 let supabaseClient = null;
+let isAdmin = false;
 
 function initSupabase() {
-    if (!window.supabase) {
-        console.error('Supabase SDK 未加载！请检查网络或 CDN。');
-        return false;
-    }
-    try {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-        return true;
-    } catch (e) {
-        console.error('Supabase 初始化失败:', e);
-        return false;
-    }
+    if (!window.supabase) return false;
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    return true;
 }
 
-const CITY_COLOR = {
-  '南宁市':'#e74c3c','桂林市':'#3498db','玉林市':'#e67e22','贵港市':'#16a085',
-  '钦州市':'#9b59b6','柳州市':'#27ae60','北海市':'#0ea5e9','贺州市':'#eab308',
-  '梧州市':'#ec4899','百色市':'#78716c','来宾市':'#a16207','崇左市':'#4f46e5',
-  '防城港市':'#0d9488','河池市':'#d97706'
-};
+const CITY_COLOR = {'南宁市':'#e74c3c','桂林市':'#3498db','玉林市':'#e67e22','贵港市':'#16a085','钦州市':'#9b59b6','柳州市':'#27ae60','北海市':'#0ea5e9','贺州市':'#eab308','梧州市':'#ec4899','百色市':'#78716c','来宾市':'#a16207','崇左市':'#4f46e5','防城港市':'#0d9488','河池市':'#d97706'};
 const DEFAULT_COLOR = '#64748b';
 
-/* ==========================================================
-   1. 地图底图与遮罩
-   ========================================================== */
-const map = L.map('map', { 
-  zoomControl: false, 
-  preferCanvas: true,
-  maxBounds: GUANGXI_BOUNDS,
-  maxBoundsViscosity: 1.0,
-  minZoom: 6
-}).setView(CENTER, ZOOM);
-
+/* ====================== 地图初始化 ====================== */
+const map = L.map('map', { zoomControl: false, preferCanvas: true, maxBounds: GUANGXI_BOUNDS, maxBoundsViscosity: 1.0, minZoom: 7 }).setView(CENTER, 7);
 L.control.zoom({ position:'bottomright' }).addTo(map);
 
-const amapVec = L.tileLayer(
-  'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-  { subdomains:'1234', maxZoom:18, attribution:'© 高德地图' });
-const amapSat = L.tileLayer(
-  'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
-  { subdomains:'1234', maxZoom:18, attribution:'© 高德地图' });
-const osm = L.tileLayer(
-  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  { maxZoom:19, attribution:'© OpenStreetMap' });
-
+const amapVec = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { subdomains:'1234', maxZoom:18 });
+const amapSat = L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', { subdomains:'1234', maxZoom:18 });
 amapVec.addTo(map);
-L.control.layers(
-  { '高德矢量': amapVec, '高德影像': amapSat, 'OpenStreetMap': osm },
-  null, { position:'topright' }
-).addTo(map);
+L.control.layers({ '高德矢量': amapVec, '高德影像': amapSat }, null, { position:'topright' }).addTo(map);
 
-// 🌟 隐藏广西区域外的地图：采用四周矩形遮罩法
+// 遮罩
 const maskStyle = { stroke: false, fillColor: '#eef2f5', fillOpacity: 1, interactive: false };
-const TOP_LAT = 26.8, BOTTOM_LAT = 20.5, LEFT_LNG = 103.5, RIGHT_LNG = 112.8;
-L.rectangle([[TOP_LAT, -180], [90, 180]], maskStyle).addTo(map);        // 上面遮罩
-L.rectangle([[-90, -180], [BOTTOM_LAT, 180]], maskStyle).addTo(map);    // 下面遮罩
-L.rectangle([[BOTTOM_LAT, -180], [TOP_LAT, LEFT_LNG]], maskStyle).addTo(map);   // 左边遮罩
-L.rectangle([[BOTTOM_LAT, RIGHT_LNG], [TOP_LAT, 180]], maskStyle).addTo(map);   // 右边遮罩
+const T=26.5, B=20.8, L_=104.2, R_=112.2;
+L.rectangle([[T, -180], [90, 180]], maskStyle).addTo(map);
+L.rectangle([[-90, -180], [B, 180]], maskStyle).addTo(map);
+L.rectangle([[B, -180], [T, L_]], maskStyle).addTo(map);
+L.rectangle([[B, R_], [T, 180]], maskStyle).addTo(map);
 
-/* ==========================================================
-   2. 数据读取与解析
-   ========================================================== */
+/* ====================== 数据解析 ====================== */
 const activeLayer = L.layerGroup().addTo(map);
 const markerById  = {};
 let DATA = [];
-let citySel = null, keyword = '', counts = {};
+let typeSel = 'all', citySel = null, keyword = '', counts = {};
 
-const FIELD_ALIASES = {
-  id:       ['id'],
-  city:     ['city'],
-  county:   ['county'],
-  address:  ['address','Address','详细地址'],
-  coord:    ['latitude and longitude','latitudeandlongitude','经纬度','坐标'],
-  lng:      ['lng','lon','longitude','经度'],
-  lat:      ['lat','latitude','纬度'],
-  name:     ['name'],
-  abbr:     ['abbreviation'],
-  group:    ['group_name','Group_name'],
-  capacity: ['capacity']
-};
+const FIELD_ALIASES = { id: ['id'], city: ['city'], county: ['county'], address: ['address','Address'], coord: ['latitude and longitude','经纬度','坐标'], lng: ['lng','lon','longitude','经度'], lat: ['lat','latitude','纬度'], name: ['name'], abbr: ['abbreviation'], group: ['group_name','Group_name'], capacity: ['capacity'] };
 
-function headerKey(s){
-  return String(s||'').trim().toLowerCase().replace(/[\s_\-]+/g,'');
-}
-function headerToField(h){
-  const k = headerKey(h);
-  for(const field in FIELD_ALIASES){
-    for(const a of FIELD_ALIASES[field]){
-      if(k === headerKey(a)) return field;
-    }
-  }
-  return null;
-}
+function headerKey(s){ return String(s||'').trim().toLowerCase().replace(/[\s_\-]+/g,''); }
+function headerToField(h){ const k = headerKey(h); for(const f in FIELD_ALIASES){ for(const a of FIELD_ALIASES[f]){ if(k === headerKey(a)) return f; } } return null; }
 
-function normalize(o){
+function normalize(o, type){
   const mapped = {};
-  for (const key in o) {
-    const field = headerToField(key);
-    if (field) mapped[field] = o[key];
-  }
-
-  let lng = parseFloat(mapped.lng);
-  let lat = parseFloat(mapped.lat);
-  
+  for (const key in o) { const f = headerToField(key); if (f) mapped[f] = o[key]; }
+  let lng = parseFloat(mapped.lng); let lat = parseFloat(mapped.lat);
   if((isNaN(lng) || isNaN(lat)) && mapped.coord){
     const m = String(mapped.coord).match(/(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)/);
     if(m){ lng = parseFloat(m[1]); lat = parseFloat(m[2]); }
   }
-  
   const capRaw = String(mapped.capacity == null ? '' : mapped.capacity).replace(/[^\d.\-]/g,'');
   const capacity = capRaw === '' ? null : Number(capRaw);
-
-  return {
-    id:       mapped.id || ('row-' + Math.random().toString(36).slice(2,8)),
-    name:     mapped.name || '未命名',
-    city:     mapped.city || '其他',
-    county:   mapped.county || '',
-    address:  mapped.address || '',
-    abbr:     mapped.abbr || '',
-    group:    mapped.group || '',
-    capacity: (capacity == null || isNaN(capacity)) ? null : capacity,
-    lng, lat
-  };
+  return { id: mapped.id || ('row-' + Math.random().toString(36).slice(2,8)), type: type, name: mapped.name || '未命名', city: mapped.city || '其他', county: mapped.county || '', address: mapped.address || '', abbr: mapped.abbr || '', group: mapped.group || '', capacity: (capacity == null || isNaN(capacity)) ? null : capacity, lng, lat };
 }
 
-const isValid = d => d && isFinite(d.lng) && isFinite(d.lat) &&
-                     d.lng > 104 && d.lng < 113 && d.lat > 20 && d.lat < 27;
+const isValid = d => d && isFinite(d.lng) && isFinite(d.lat) && d.lng > 104 && d.lng < 113 && d.lat > 20 && d.lat < 27;
 
 async function loadData(){
   if (!supabaseClient) throw new Error('Supabase 客户端未初始化');
-  try {
-    const { data, error } = await supabaseClient.from(SUPABASE_API_TABLE).select('*');
-    if (error) throw new Error(`数据库查询失败: ${error.message}`);
-    if (!data || !Array.isArray(data)) throw new Error('数据库返回数据格式不正确');
-
-    const out = data.map(normalize).filter(isValid);
-    if(out.length) return out;
-    throw new Error(`数据库返回了 ${data.length} 条数据，但没有一条符合广西坐标范围。请检查数据库里经纬度是否正确。`);
-  } catch(e) {
-    throw e;
-  }
+  const [fRes, pRes] = await Promise.all([ supabaseClient.from(TABLE_FACTORY).select('*'), supabaseClient.from(TABLE_PORT).select('*') ]);
+  if (fRes.error) throw new Error(`饲料厂表: ${fRes.error.message}`);
+  if (pRes.error) throw new Error(`码头表: ${pRes.error.message}`);
+  return [...(fRes.data||[]).map(o=>normalize(o,'factory')).filter(isValid), ...(pRes.data||[]).map(o=>normalize(o,'port')).filter(isValid)];
 }
 
-/* ==========================================================
-   3. 画点与渲染
-   ========================================================== */
-function radiusOf(cap){
-  if(cap == null || cap <= 0) return 4.5;
-  return Math.min(16, 4 + 4 * Math.sqrt(cap));
-}
-
-function esc(s){
-  return String(s == null ? '' : s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+/* ====================== 画点与渲染 ====================== */
+function radiusOf(cap){ return cap == null || cap <= 0 ? 4.5 : Math.min(16, 4 + 4 * Math.sqrt(cap)); }
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function popupHtml(d){
-  const cap = d.capacity == null ? '—' : d.capacity + ' 万吨/年';
   const row = (k, v) => v ? '<tr><td>' + k + '</td><td>' + esc(v) + '</td></tr>' : '';
-  return '<div class="pop">'
-    + '<div class="pop-name">' + esc(d.name) + '</div>'
-    + '<table>'
-    + row('位置', d.city + ' ' + d.county)
-    + row('地址', d.address)
-    + row('简称', d.abbr)
-    + row('产能', cap)
-    + row('归属', d.group)
-    + row('坐标', d.lng.toFixed(4) + ', ' + d.lat.toFixed(4))
-    + '</table></div>';
+  let html = '<div class="pop">';
+  if (d.type === 'port') {
+      html += '<div class="pop-name">⛴️ ' + esc(d.name) + '</div><table>' + row('类型','码头') + row('位置', d.city + ' ' + d.county) + row('地址', d.address) + row('坐标', d.lng.toFixed(4) + ', ' + d.lat.toFixed(4)) + '</table>';
+  } else {
+      html += '<div class="pop-name">🏭 ' + esc(d.name) + '</div><table>' + row('类型','饲料厂') + row('位置', d.city + ' ' + d.county) + row('地址', d.address) + row('产能', d.capacity == null ? '—' : d.capacity + ' 万吨') + row('归属', d.group) + row('坐标', d.lng.toFixed(4) + ', ' + d.lat.toFixed(4)) + '</table>';
+  }
+  // 🌟 如果是管理员，增加编辑/删除按钮
+  if (isAdmin) {
+      html += `<div class="pop-actions">
+                 <button class="btn-edit" onclick="openEdit('${d.id}')">✏️ 编辑</button>
+                 <button class="btn-del" onclick="deleteLocation('${d.id}')">🗑️ 删除</button>
+               </div>`;
+  }
+  html += '</div>';
+  return html;
 }
 
 function buildMarkers(){
   DATA.forEach(d => {
-    const color = CITY_COLOR[d.city] || DEFAULT_COLOR;
-    const m = L.circleMarker([d.lat, d.lng], {
-      radius: radiusOf(d.capacity),
-      color: '#ffffff',
-      weight: 1.2,
-      fillColor: color,
-      fillOpacity: d.capacity == null ? 0.55 : 0.88,
-      dashArray: d.capacity == null ? '3,2' : null
-    });
+    let m;
+    if (d.type === 'port') {
+        m = L.circleMarker([d.lat, d.lng], { radius: 7, color: '#ffffff', weight: 1.5, fillColor: '#1e3a8a', fillOpacity: 0.95 });
+    } else {
+        const color = CITY_COLOR[d.city] || DEFAULT_COLOR;
+        m = L.circleMarker([d.lat, d.lng], { radius: radiusOf(d.capacity), color: '#ffffff', weight: 1.2, fillColor: color, fillOpacity: d.capacity == null ? 0.55 : 0.88, dashArray: d.capacity == null ? '3,2' : null });
+    }
     m.bindPopup(popupHtml(d), { maxWidth:320 });
-    m.bindTooltip(d.name, { direction:'top', offset:[0,-4] });
-    m.on('click', () => selectCard(d.id));
+    m.bindTooltip((d.type === 'port' ? '⛴️ ' : '🏭 ') + d.name, { direction:'top', offset:[0,-4] });
     markerById[d.id] = m;
   });
 }
 
-/* ==========================================================
-   4. 侧边栏与交互
-   ========================================================== */
-const listEl  = document.getElementById('list');
-const chipsEl = document.getElementById('chips');
-const qEl     = document.getElementById('q');
-const totalEl = document.getElementById('total');
-const panel   = document.getElementById('panel');
-const openBtn = document.getElementById('openBtn');
+/* ====================== 侧边栏逻辑 ====================== */
+const listEl = document.getElementById('list'), chipsEl = document.getElementById('chips'), qEl = document.getElementById('q'), totalEl = document.getElementById('total'), panel = document.getElementById('panel'), openBtn = document.getElementById('openBtn'), addBtn = document.getElementById('addBtn'), typeTabs = document.querySelectorAll('.type-tab');
+
+typeTabs.forEach(tab => { tab.onclick = () => { typeSel = tab.dataset.type; typeTabs.forEach(t => t.classList.toggle('on', t === tab)); buildChips(); render(); }; });
 
 function buildChips(){
   counts = {};
-  DATA.forEach(d => counts[d.city] = (counts[d.city] || 0) + 1);
+  DATA.filter(d => typeSel === 'all' || d.type === typeSel).forEach(d => counts[d.city] = (counts[d.city] || 0) + 1);
   const cities = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
-
   chipsEl.innerHTML = '';
-  chipsEl.appendChild(makeChip('全部 ' + DATA.length, null, null));
-  cities.forEach(c => chipsEl.appendChild(
-    makeChip(c + ' ' + counts[c], c, CITY_COLOR[c] || DEFAULT_COLOR)
-  ));
-
+  const totalInTab = DATA.filter(d => typeSel === 'all' || d.type === typeSel).length;
+  chipsEl.appendChild(makeChip('全部 ' + totalInTab, null, null));
+  cities.forEach(c => chipsEl.appendChild(makeChip(c + ' ' + counts[c], c, CITY_COLOR[c] || DEFAULT_COLOR)));
   function makeChip(label, city, color){
-    const el = document.createElement('div');
-    el.className = 'chip' + (city === null ? ' on' : '');
-    el.textContent = label;
+    const el = document.createElement('div'); el.className = 'chip' + (city === null ? ' on' : ''); el.textContent = label;
     if(color) el.style.borderColor = color;
     el.dataset.city = city === null ? '' : city;
-    el.onclick = () => {
-      citySel = (citySel === city) ? null : city;
-      syncChips(); render();
-    };
+    el.onclick = () => { citySel = (citySel === city) ? null : city; syncChips(); render(); };
     return el;
   }
 }
-
-function syncChips(){
-  [...chipsEl.children].forEach(el => {
-    el.classList.toggle('on', (el.dataset.city || null) === citySel);
-  });
-}
+function syncChips(){ [...chipsEl.children].forEach(el => el.classList.toggle('on', (el.dataset.city || null) === citySel)); }
 
 function render(){
   activeLayer.clearLayers();
-
   const q = keyword.toLowerCase();
   const rows = DATA.filter(d => {
+    if(typeSel !== 'all' && d.type !== typeSel) return false;
     if(citySel && d.city !== citySel) return false;
-    if(q){
-      const hay = (d.name + d.abbr + d.group + d.city + d.county + d.address).toLowerCase();
-      if(!hay.includes(q)) return false;
-    }
+    if(q){ const hay = (d.name + d.abbr + d.group + d.city + d.county + d.address).toLowerCase(); if(!hay.includes(q)) return false; }
     return true;
-  }).sort((a,b) => (b.capacity || 0) - (a.capacity || 0));
+  }).sort((a,b) => { if (a.type === 'port' && b.type !== 'port') return -1; if (a.type !== 'port' && b.type === 'port') return 1; return (b.capacity || 0) - (a.capacity || 0); });
 
   rows.forEach(d => markerById[d.id].addTo(activeLayer));
-
-  if(!rows.length){
-    listEl.innerHTML = '<div style="padding:26px;color:#94a3b8;font-size:12px;text-align:center">没有匹配的工厂</div>';
-    return;
-  }
+  totalEl.textContent = rows.length;
+  if(!rows.length){ listEl.innerHTML = '<div style="padding:26px;color:#94a3b8;font-size:12px;text-align:center">没有匹配的地点</div>'; return; }
 
   listEl.innerHTML = rows.map(d => {
-    const cap = d.capacity == null ? '<span class="cap na">—</span>' : '<span class="cap">' + d.capacity + '</span>';
-    const color = CITY_COLOR[d.city] || DEFAULT_COLOR;
-    return '<div class="item" data-id="' + d.id + '">'
-      + '<span class="dot" style="background:' + color + '"></span>'
-      + '<div class="it-main">'
-      +   '<div class="it-name">' + esc(d.name) + '</div>'
-      +   '<div class="it-sub">' + esc(d.city + ' ' + d.county + (d.abbr ? ' · ' + d.abbr : '')) + '</div>'
-      + '</div>' + cap + '</div>';
+    let rightTag = d.type === 'port' ? '<span class="cap" style="color:#1e3a8a;background:#e0e7ff;">码头</span>' : (d.capacity == null ? '<span class="cap na">—</span>' : '<span class="cap">' + d.capacity + '</span>');
+    let dotClass = d.type === 'port' ? 'square' : 'circle';
+    let dotStyle = d.type === 'port' ? '' : 'background:' + (CITY_COLOR[d.city] || DEFAULT_COLOR);
+    return '<div class="item" data-id="' + d.id + '"><span class="dot ' + dotClass + '" style="' + dotStyle + '"></span><div class="it-main"><div class="it-name">' + esc(d.name) + '</div><div class="it-sub">' + esc(d.city + ' ' + d.county + (d.abbr ? ' · ' + d.abbr : '')) + '</div></div>' + rightTag + '</div>';
   }).join('');
 
   listEl.querySelectorAll('.item').forEach(el => {
     el.onclick = () => {
-      const d = DATA.find(x => x.id === el.dataset.id);
-      if(!d) return;
+      const d = DATA.find(x => x.id === el.dataset.id); if(!d) return;
       map.flyTo([d.lat, d.lng], Math.max(map.getZoom(), 11), { duration:.7 });
       setTimeout(() => markerById[d.id].openPopup(), 720);
-      selectCard(d.id);
       if(window.innerWidth <= 760) togglePanel(false);
     };
   });
 }
 
-function selectCard(id){
-  listEl.querySelectorAll('.item').forEach(el => {
-    const on = el.dataset.id === id;
-    el.classList.toggle('sel', on);
-    if(on) el.scrollIntoView({ block:'nearest', behavior:'smooth' });
-  });
-}
-
 qEl.addEventListener('input', e => { keyword = e.target.value.trim(); render(); });
-
-function togglePanel(show){
-  panel.classList.toggle('hide', !show);
-  openBtn.classList.toggle('show', !show);
-}
+function togglePanel(show){ panel.classList.toggle('hide', !show); openBtn.classList.toggle('show', !show); }
 document.getElementById('closeBtn').onclick = () => togglePanel(false);
 openBtn.onclick = () => togglePanel(true);
 
-/* ==========================================================
-   5. 个人定位逻辑（白色三角符号）
-   ========================================================== */
+/* ====================== 🌟 权限编辑逻辑 ====================== */
+// 全局暴露给弹窗的编辑/删除方法
+window.openEdit = function(id) {
+    const d = DATA.find(x => x.id === id);
+    if (!d) return;
+    
+    document.getElementById('modalTitle').textContent = d.type === 'port' ? '编辑码头' : '编辑饲料厂';
+    document.getElementById('editId').value = d.id;
+    document.getElementById('editType').value = d.type;
+    document.getElementById('editName').value = d.name;
+    document.getElementById('editCity').value = d.city;
+    document.getElementById('editCounty').value = d.county;
+    document.getElementById('editAddress').value = d.address;
+    document.getElementById('editLng').value = d.lng;
+    document.getElementById('editLat').value = d.lat;
+    document.getElementById('editCapacity').value = d.capacity || '';
+    
+    document.getElementById('capGroup').style.display = d.type === 'port' ? 'none' : 'block';
+    document.getElementById('editModal').style.display = 'flex';
+};
+
+window.closeModal = function() { document.getElementById('editModal').style.display = 'none'; };
+
+window.saveLocation = async function() {
+    const id = document.getElementById('editId').value || ('user-' + Date.now());
+    const type = document.getElementById('editType').value || 'factory'; // 默认新增饲料厂
+    const table = type === 'port' ? TABLE_PORT : TABLE_FACTORY;
+    
+    const payload = {
+        id: id,
+        name: document.getElementById('editName').value.trim(),
+        city: document.getElementById('editCity').value.trim(),
+        county: document.getElementById('editCounty').value.trim(),
+        address: document.getElementById('editAddress').value.trim(),
+        lng: parseFloat(document.getElementById('editLng').value),
+        lat: parseFloat(document.getElementById('editLat').value),
+    };
+    if (type !== 'port') {
+        const capVal = document.getElementById('editCapacity').value;
+        payload.capacity = capVal ? parseFloat(capVal) : null;
+    }
+
+    if (!payload.name || isNaN(payload.lng) || isNaN(payload.lat)) { alert('名称、经纬度不能为空！'); return; }
+
+    try {
+        // 判断是新增还是更新（由于ID是文本，我们统一用 upsert）
+        const { error } = await supabaseClient.from(table).upsert(payload);
+        if (error) throw error;
+        
+        alert('保存成功！刷新页面查看。');
+        closeModal();
+        // 可选：直接重新加载数据，避免手动刷新
+        DATA = await loadData();
+        // 重建标记并渲染（需要清理旧的 mark)
+        Object.keys(markerById).forEach(k => delete markerById[k]);
+        buildMarkers(); buildChips(); render();
+        
+    } catch (e) { alert('保存失败：' + e.message); }
+};
+
+window.deleteLocation = async function(id) {
+    if (!confirm('确定要删除这个地点吗？此操作不可恢复！')) return;
+    const d = DATA.find(x => x.id === id);
+    if (!d) return;
+    const table = d.type === 'port' ? TABLE_PORT : TABLE_FACTORY;
+    
+    try {
+        const { error } = await supabaseClient.from(table).delete().eq('id', id);
+        if (error) throw error;
+        alert('删除成功！');
+        // 前端移除
+        DATA = DATA.filter(x => x.id !== id);
+        if (markerById[id]) { map.removeLayer(markerById[id]); delete markerById[id]; }
+        buildChips(); render();
+    } catch (e) { alert('删除失败：' + e.message); }
+};
+
+// 新增按钮逻辑（默认新增饲料厂，如需新增码头可弹窗选择）
+addBtn.onclick = () => {
+    // 简单处理：如果当前筛选了码头，就新增码头，否则新增饲料厂
+    const defaultType = (typeSel === 'port') ? 'port' : 'factory';
+    document.getElementById('modalTitle').textContent = defaultType === 'port' ? '新增码头' : '新增饲料厂';
+    document.getElementById('editId').value = ''; // 空ID代表新增
+    document.getElementById('editType').value = defaultType;
+    document.getElementById('editName').value = '';
+    document.getElementById('editCity').value = '';
+    document.getElementById('editCounty').value = '';
+    document.getElementById('editAddress').value = '';
+    document.getElementById('editLng').value = ''; 
+    document.getElementById('editLat').value = '';
+    document.getElementById('editCapacity').value = '';
+    
+    document.getElementById('capGroup').style.display = defaultType === 'port' ? 'none' : 'block';
+    document.getElementById('editModal').style.display = 'flex';
+};
+
+/* ====================== 定位与登录 ====================== */
 let userMarker = null;
-let userAccuracyCircle = null;
+const whiteTriangleIcon = L.divIcon({ className: 'custom-location-icon', html: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L21 20L12 16L3 20L12 3Z" fill="white" stroke="#0ea5e9" stroke-width="2" stroke-linejoin="round"/></svg>', iconSize: [24, 24], iconAnchor: [12, 22], popupAnchor: [0, -22] });
+map.on('locationfound', (e) => { if (userMarker) map.removeLayer(userMarker); userMarker = L.marker(e.latlng, { icon: whiteTriangleIcon }).addTo(map); userMarker.bindPopup('📍 我的位置').openPopup(); });
 
-// 绘制白色三角形的 SVG 图标
-const whiteTriangleIcon = L.divIcon({
-    className: 'custom-location-icon',
-    html: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L21 20L12 16L3 20L12 3Z" fill="white" stroke="#0ea5e9" stroke-width="2" stroke-linejoin="round"/></svg>',
-    iconSize: [24, 24],
-    iconAnchor: [12, 22], // 让三角形底部尖端指向实际坐标
-    popupAnchor: [0, -22]
-});
-
-map.on('locationfound', (e) => {
-  if (userMarker) map.removeLayer(userMarker);
-  if (userAccuracyCircle) map.removeLayer(userAccuracyCircle);
-
-  userAccuracyCircle = L.circle(e.latlng, e.accuracy, {
-    color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.1, weight: 1
-  }).addTo(map);
-
-  userMarker = L.marker(e.latlng, { icon: whiteTriangleIcon }).addTo(map);
-  userMarker.bindPopup('<b>📍 我的位置</b><br>精度：' + Math.round(e.accuracy) + ' 米').openPopup();
-});
-
-map.on('locationerror', (e) => {
-  console.warn('定位失败，可能是用户拒绝了浏览器定位权限：', e.message);
-});
-
-/* ==========================================================
-   6. 登录与鉴权逻辑
-   ========================================================== */
-const loginOverlay = document.getElementById('login-overlay');
-const loginErr = document.getElementById('loginErr');
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
+const loginOverlay = document.getElementById('login-overlay'), loginErr = document.getElementById('loginErr'), loginBtn = document.getElementById('loginBtn'), logoutBtn = document.getElementById('logoutBtn');
 
 function startApp() {
-  loginOverlay.style.display = 'none';
-  logoutBtn.style.display = 'block';
+  loginOverlay.style.display = 'none'; logoutBtn.style.display = 'block';
   document.getElementById('boot').classList.remove('hide');
   
+  // 根据权限决定是否显示新增按钮
+  if (isAdmin) { addBtn.classList.add('show'); logoutBtn.style.right = '110px'; } 
+  else { addBtn.classList.remove('show'); logoutBtn.style.right = '10px'; }
+
   (async function boot(){
     try{
       DATA = await loadData();
       document.getElementById('boot').classList.add('hide');
-      totalEl.textContent = DATA.length;
-
-      buildMarkers();
-      buildChips();
-      render();
-
-      map.fitBounds(L.latLngBounds(DATA.map(d => [d.lat, d.lng])),
-                     { padding:[40,40], maxZoom:10 });
-
+      buildMarkers(); buildChips(); render();
+      map.fitBounds(L.latLngBounds(DATA.map(d => [d.lat, d.lng])), { padding:[40,40], maxZoom:10 });
       if(window.innerWidth <= 760) togglePanel(false);
-    }catch(err){
-      document.getElementById('boot').innerHTML = 
-        '<div style="max-width:440px">'
-        + '<div style="font-size:32px;margin-bottom:10px">⚠️</div>'
-        + '<div style="color:#0f172a;font-weight:600;margin-bottom:8px">数据加载失败</div>'
-        + '<div style="font-size:12.5px;color:#64748b">'
-        + esc(err.message) + '<br><br>'
-        + '请确认您已在 Supabase 创建了该用户，并配置了允许 authenticated 角色读取的 RLS 策略。'
-        + '</div></div>';
-    }
+    }catch(err){ document.getElementById('boot').innerHTML = '<div style="color:#e74c3c;">加载失败：' + esc(err.message) + '</div>'; }
   })();
 }
 
 loginBtn.addEventListener('click', async () => {
-  const user = document.getElementById('username').value.trim();
-  const pass = document.getElementById('password').value;
-  
+  const user = document.getElementById('username').value.trim(), pass = document.getElementById('password').value;
   loginErr.style.display = 'none';
+  if (!user || !pass) { loginErr.textContent = '请输入账号和密码'; loginErr.style.display = 'block'; return; }
+  let email = user === 'DHLY-maoyi' ? '2754124753@qq.com' : user;
 
-  if (!user || !pass) {
-      loginErr.textContent = '请输入账号和密码';
-      loginErr.style.display = 'block';
-      return;
-  }
-
-  let email = user;
-  if (user === LOGIN_ALIAS) {
-      email = REAL_EMAIL;
-  }
-  
-  console.log('🔐 尝试登录，账号:', user, ' 映射邮箱:', email);
-
-  loginBtn.disabled = true;
-  loginBtn.textContent = '登录中...';
-
+  loginBtn.disabled = true; loginBtn.textContent = '登录中...';
   try {
-    if (!supabaseClient) throw new Error('Supabase SDK 加载失败，请检查网络或刷新页面重试。');
-
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-      email: email,
-      password: pass,
-    });
-
-    if (error) {
-      console.error('❌ Supabase 登录错误:', error);
-      if (error.message.includes('Invalid login credentials')) {
-        throw new Error('账号或密码错误。请检查 Supabase 用户设置。');
-      } else if (error.message.includes('Email not confirmed')) {
-        throw new Error('邮箱未确认。请去 Supabase 后台确认用户或关闭邮箱验证。');
-      } else {
-        throw new Error(error.message);
-      }
-    }
-
-    console.log('✅ 登录成功，会话信息已获取');
+    if (!supabaseClient) throw new Error('SDK 加载失败');
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+    if (error) throw new Error(error.message.includes('Invalid login credentials') ? '账号或密码错误' : error.message);
     
-    // 🌟 关键修改：在用户“点击登录”这个动作的上下文中，立刻触发定位
-    // 这样浏览器就不会因为“无用户手势”而静默拦截定位请求
-    map.locate({ setView: false, maxZoom: 15 });
-
-    startApp();
-
-  } catch (err) {
-    console.error('⚠️ 登录异常:', err);
-    loginErr.textContent = err.message || '网络异常，请稍后重试';
-    loginErr.style.display = 'block';
-  } finally {
-    loginBtn.disabled = false;
-    loginBtn.textContent = '登录';
-  }
+    // 🌟 判断是否为管理员
+    isAdmin = ADMIN_EMAILS.includes(data.user.email);
+    map.locate({ setView: false }); startApp();
+  } catch (err) { loginErr.textContent = err.message; loginErr.style.display = 'block'; }
+  finally { loginBtn.disabled = false; loginBtn.textContent = '登录'; }
 });
 
-document.getElementById('password').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') loginBtn.click();
-});
-document.getElementById('username').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') loginBtn.click();
-});
-
-logoutBtn.onclick = async () => {
-  if (supabaseClient) {
-    await supabaseClient.auth.signOut();
-  }
-  location.reload();
-};
+logoutBtn.onclick = async () => { if (supabaseClient) await supabaseClient.auth.signOut(); location.reload(); };
 
 async function checkSession() {
   if (!initSupabase()) return;
-  try {
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
-    if (error) return;
-    if (session) {
-      console.log('🔄 检测到已有登录会话，自动进入地图');
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session) {
+      isAdmin = ADMIN_EMAILS.includes(session.user.email);
       startApp();
-    }
-  } catch (e) {
-    console.error('检查会话异常:', e);
   }
 }
-
 window.addEventListener('DOMContentLoaded', checkSession);
-
 </script>
 </body>
 </html>
