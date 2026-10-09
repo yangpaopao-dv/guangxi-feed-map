@@ -960,16 +960,20 @@ button:disabled{cursor:not-allowed;opacity:.58}
 
 /* Fixed city totals at overview zoom; individual point symbols at detail zoom. */
 .location-div-icon,.city-aggregate-icon{border:0!important;background:transparent!important}
-.point-icon-visual{display:block;width:36px;height:42px;filter:drop-shadow(0 4px 5px rgba(24,47,60,.24));transition:transform .18s ease,filter .18s ease}
-.point-icon-visual:hover{transform:translateY(-2px) scale(1.06);filter:drop-shadow(0 7px 8px rgba(24,47,60,.3))}
+.point-icon-visual{display:block;width:36px;height:42px;filter:drop-shadow(0 2px 4px rgba(24,47,60,.16));transition:transform .18s ease,filter .18s ease}
+.location-div-icon:hover .point-icon-visual,.location-div-icon:focus .point-icon-visual{transform:scale(1.04);filter:drop-shadow(0 4px 6px rgba(24,47,60,.22))}
 .point-pin{display:block;width:36px;height:42px}
-.point-pin .pin-shell{stroke:#fff;stroke-width:2;stroke-linejoin:round}
-.point-pin.factory .pin-shell{fill:var(--factory)}
-.point-pin.dock .pin-shell{fill:var(--dock)}
+.point-pin .pin-shell{stroke:rgba(255,255,255,.84);stroke-width:1.8;stroke-linejoin:round}
+.point-pin.factory .pin-shell{fill:rgba(229,138,59,.72)}
+.point-pin.dock .pin-shell{fill:rgba(15,118,110,.72)}
+.location-div-icon:hover .point-pin.factory .pin-shell,.location-div-icon:focus .point-pin.factory .pin-shell{fill:rgba(229,138,59,.9)}
+.location-div-icon:hover .point-pin.dock .pin-shell,.location-div-icon:focus .point-pin.dock .pin-shell{fill:rgba(15,118,110,.9)}
 .point-pin .pin-glyph{fill:#fff}
-.city-aggregate-badge{display:flex;align-items:center;justify-content:center;flex-direction:column;width:48px;height:38px;border:1px solid rgba(229,138,59,.45);border-radius:11px;background:rgba(255,255,255,.9);color:#475569;box-shadow:0 3px 10px rgba(31,41,55,.16);font-size:10px;font-weight:750;line-height:1.15;white-space:nowrap;backdrop-filter:blur(6px);transition:transform .18s ease,box-shadow .18s ease}
-.city-aggregate-badge strong{margin-top:2px;color:#a9571d;font-size:12px;font-weight:850}
-.city-aggregate-icon:hover .city-aggregate-badge{transform:translateY(-2px);box-shadow:0 6px 14px rgba(31,41,55,.22)}
+.city-aggregate-badge{position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;width:58px;height:42px;border:1px solid rgba(205,139,73,.42);border-radius:12px;background:linear-gradient(150deg,rgba(255,255,255,.97),rgba(255,247,236,.94));color:#334155;box-shadow:0 3px 10px rgba(31,41,55,.15),0 0 0 2px rgba(255,255,255,.5);font-size:11px;font-weight:750;line-height:1.12;white-space:nowrap;backdrop-filter:blur(8px);transition:border-color .18s ease,box-shadow .18s ease}
+.city-aggregate-badge::before{position:absolute;top:5px;left:7px;width:4px;height:4px;border-radius:50%;background:var(--factory);content:""}
+.city-aggregate-name{max-width:52px;overflow:hidden;text-overflow:ellipsis}
+.city-aggregate-total{margin-top:2px;color:#a75118;font-size:13px;font-weight:850;letter-spacing:.01em}
+.city-aggregate-icon:hover .city-aggregate-badge,.city-aggregate-icon:focus .city-aggregate-badge{border-color:rgba(188,111,41,.7);box-shadow:0 5px 15px rgba(31,41,55,.2),0 0 0 2px rgba(255,255,255,.65)}
 .user-location-icon{border:0!important;background:transparent!important}
 .user-location-icon svg{display:block;width:16px;height:16px;filter:drop-shadow(0 1px 2px rgba(18,43,76,.45))}
 
@@ -1035,6 +1039,12 @@ button:disabled{cursor:not-allowed;opacity:.58}
   .panel-close{width:28px;height:28px}
   .panel-body{padding-top:13px}
   .panel-heading h2{font-size:18px}
+}
+@media(max-width:359px){
+  .city-aggregate-badge{width:52px;height:34px;border-radius:10px;font-size:9.5px}
+  .city-aggregate-badge::before{top:4px;left:6px;width:3px;height:3px}
+  .city-aggregate-name{max-width:47px}
+  .city-aggregate-total{margin-top:1px;font-size:11.5px}
 }
 
 </style>
@@ -1231,6 +1241,17 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
   };
   const CITIES = Object.keys(CITY_COLORS);
   const DETAIL_ZOOM = 10;
+  // Pre-set points inside each city keep all 14 labels separate even on a
+  // narrow overview map. These coordinates never depend on zoom or data.
+  const CITY_LABEL_POINTS = {
+    450100: [108.467546, 23.288023], 450200: [109.122502, 24.947910],
+    450300: [110.518333, 25.355490], 450400: [111.499919, 23.711073],
+    450500: [109.091311, 21.430475], 450600: [107.511268, 21.635236],
+    450700: [109.020264, 22.405280], 450800: [110.003160, 23.307229],
+    450900: [110.439626, 22.440758], 451000: [106.289767, 23.986179],
+    451100: [111.500000, 24.500000], 451200: [107.593452, 24.871595],
+    451300: [108.659463, 24.082556], 451400: [107.024953, 22.502179]
+  };
   const CITY_FILL_COLORS = [
     '#8fb5c9', '#b4a5c8', '#d0b093', '#9dbfa8', '#c8aaa9', '#91bac0', '#c8b997',
     '#a9b3d1', '#abc2a0', '#c6a7ba', '#b6c6d2', '#c7b49e', '#a5c7c0', '#d0b4a8'
@@ -1270,6 +1291,7 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
   let factoryPointLayer;
   let dockPointLayer;
   let cityAggregateLayer;
+  let cityBadgeByName = new Map();
   let detailMarkerOffsets = new Map();
   let overviewDockOffsets = new Map();
   let showingDetailMarkers = null;
@@ -1407,6 +1429,8 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     map.getPane('provinceBorder').style.zIndex = 420;
     map.createPane('cityAggregates');
     map.getPane('cityAggregates').style.zIndex = 580;
+    map.createPane('userLocation');
+    map.getPane('userLocation').style.zIndex = 560;
     const outline = L.geoJSON(boundary, {
       pane: 'provinceBorder', interactive: false,
       style: { color: '#0f766e', weight: 2, opacity: 0.95, fillOpacity: 0 }
@@ -1439,13 +1463,14 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     }
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     factoryPointLayer = L.layerGroup();
-    dockPointLayer = L.layerGroup().addTo(map);
+    dockPointLayer = L.layerGroup();
     cityAggregateLayer = L.layerGroup();
     map.on('zoomend', syncMapLayers);
     map.on('locationfound', event => {
       if (role === 'none') return;
       if (userLocationMarker) map.removeLayer(userLocationMarker);
       userLocationMarker = L.marker(event.latlng, {
+        pane: 'userLocation',
         icon: L.divIcon({
           className: 'user-location-icon',
           html: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 14.5 14 1.5 14Z" fill="#fff" stroke="#243b53" stroke-width="1.5" stroke-linejoin="round"/></svg>',
@@ -1453,7 +1478,6 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
         }),
         title: '我的位置', alt: '我的位置', zIndexOffset: 1000
       }).bindPopup('我的位置').addTo(map);
-      placeCityAggregateBadges();
     });
     map.on('locationerror', () => {});
     map.setMaxBounds(gxBounds.pad(0.08));
@@ -1495,45 +1519,25 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     return polygons.some(polygon => pointInRing(lng, lat, polygon[0]) &&
       !polygon.slice(1).some(hole => pointInRing(lng, lat, hole)));
   }
-  function placeCityAggregateBadges() {
-    if (!map || !cityAggregateLayer || map.getZoom() >= DETAIL_ZOOM) return;
-    const rects = [];
-    const markerRect = marker => {
-      const point = map.latLngToContainerPoint(marker.getLatLng());
+  function fixedCityLabelPoint(city) {
+    const override = CITY_LABEL_POINTS[city.properties?.adcode];
+    const point = override && pointInCity(override[0], override[1], city)
+      ? override : city.properties?.centroid;
+    return Array.isArray(point) && point.length >= 2 ? point : null;
+  }
+  function cityBadgeIcon(badge) {
+    const compact = window.innerWidth < 360;
+    const width = compact ? 52 : 58;
+    const height = compact ? 34 : 42;
+    return L.divIcon({ className: 'city-aggregate-icon', html: badge,
+      iconSize: [width, height], iconAnchor: [width / 2, height / 2] });
+  }
+  function resizeCityBadges() {
+    for (const { marker } of cityBadgeByName.values()) {
       const icon = marker.options.icon.options;
-      const anchor = icon.iconAnchor || [0, 0];
-      const size = icon.iconSize || [0, 0];
-      return { left: point.x - anchor[0] - 5, top: point.y - anchor[1] - 5,
-        right: point.x - anchor[0] + size[0] + 5,
-        bottom: point.y - anchor[1] + size[1] + 5 };
-    };
-    for (const [key, marker] of markerByKey) {
-      if (recordByKey.get(key)?.type === 'dock') rects.push(markerRect(marker));
+      const targetWidth = window.innerWidth < 360 ? 52 : 58;
+      if (icon.iconSize[0] !== targetWidth) marker.setIcon(cityBadgeIcon(icon.html));
     }
-    if (userLocationMarker) rects.push(markerRect(userLocationMarker));
-    const overlaps = (a, b) => a.left < b.right && a.right > b.left &&
-      a.top < b.bottom && a.bottom > b.top;
-    const offsets = [[0, 0], [0, -62], [54, -38], [-54, -38],
-      [54, 28], [-54, 28], [0, 62], [85, 0], [-85, 0]];
-    cityAggregateLayer.eachLayer(marker => {
-      const point = map.latLngToContainerPoint(marker.getLatLng());
-      const candidates = offsets.map(([x, y]) => {
-        const latlng = map.containerPointToLatLng([point.x + x, point.y + y]);
-        return { x, y, inside: pointInCity(latlng.lng, latlng.lat, marker.cityFeature),
-          rect: { left: point.x + x - 29, top: point.y + y - 24,
-            right: point.x + x + 29, bottom: point.y + y + 24 } };
-      });
-      const clear = candidate => rects.every(rect => !overlaps(candidate.rect, rect));
-      const chosen = candidates.find(candidate => candidate.inside && clear(candidate)) ||
-        candidates.find(clear) || candidates[0];
-      rects.push(chosen.rect);
-      const icon = marker.options.icon.options;
-      const nextAnchor = [24 - chosen.x, 19 - chosen.y];
-      if (icon.iconAnchor[0] !== nextAnchor[0] || icon.iconAnchor[1] !== nextAnchor[1]) {
-        marker.setIcon(L.divIcon({ className: 'city-aggregate-icon', html: icon.html,
-          iconSize: [48, 38], iconAnchor: nextAnchor }));
-      }
-    });
   }
   function syncMapLayers() {
     if (!map || !factoryPointLayer || !cityAggregateLayer) return;
@@ -1545,21 +1549,34 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
         const offset = showDetails ? detailMarkerOffsets.get(key)
           : record.type === 'dock' ? overviewDockOffsets.get(key) : null;
         marker.setIcon(makeIcon(record.type, offset));
+        const tooltip = marker.getTooltip();
+        if (tooltip) {
+          tooltip.options.offset = L.point(offset?.x || 0, (offset?.y || 0) - 34);
+          if (tooltip.isOpen()) tooltip.update();
+        }
       }
       showingDetailMarkers = showDetails;
     }
+    // Overview shows one layer at a time: city totals for All/Factory, or dock
+    // points for Dock. Detail shows independent factory and dock point layers.
+    // Removing a layer before adding the next prevents overlapping symbols.
     if (showDetails) {
       if (map.hasLayer(cityAggregateLayer)) map.removeLayer(cityAggregateLayer);
       if (!map.hasLayer(factoryPointLayer)) factoryPointLayer.addTo(map);
+      if (!map.hasLayer(dockPointLayer)) dockPointLayer.addTo(map);
     } else {
       if (map.hasLayer(factoryPointLayer)) map.removeLayer(factoryPointLayer);
-      if (!map.hasLayer(cityAggregateLayer)) cityAggregateLayer.addTo(map);
-      placeCityAggregateBadges();
+      if (typeFilter === 'dock') {
+        if (map.hasLayer(cityAggregateLayer)) map.removeLayer(cityAggregateLayer);
+        if (!map.hasLayer(dockPointLayer)) dockPointLayer.addTo(map);
+      } else {
+        if (map.hasLayer(dockPointLayer)) map.removeLayer(dockPointLayer);
+        if (!map.hasLayer(cityAggregateLayer)) cityAggregateLayer.addTo(map);
+      }
     }
   }
   function renderCityAggregates(rows) {
     if (!cityAggregateLayer) return;
-    cityAggregateLayer.clearLayers();
     const counts = new Map();
     for (const record of rows) {
       if (record.type !== 'factory' || !record.valid) continue;
@@ -1568,25 +1585,42 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     }
     for (const city of window.GUANGXI_CITIES_BOUNDARY?.features || []) {
       const name = city.properties?.name || '';
-      const centroid = city.properties?.centroid;
       const count = counts.get(name) || 0;
-      if (!count || !Array.isArray(centroid) || centroid.length < 2) continue;
-      const badge = document.createElement('span');
-      badge.className = 'city-aggregate-badge';
-      const label = document.createElement('span');
-      label.textContent = name.replace(/市$/, '');
-      const total = document.createElement('strong');
-      total.textContent = `${count} 家`;
-      badge.append(label, total);
-      const marker = L.marker([centroid[1], centroid[0]], {
-        pane: 'cityAggregates', title: `${name} · ${count} 家饲料厂`,
-        alt: `${name} · ${count} 家饲料厂`,
-        icon: L.divIcon({ className: 'city-aggregate-icon', html: badge,
-          iconSize: [48, 38], iconAnchor: [24, 19] })
-      });
-      marker.cityFeature = city;
-      marker.on('click', () => map.setView([centroid[1], centroid[0]], DETAIL_ZOOM, { animate: true }));
-      marker.addTo(cityAggregateLayer);
+      let entry = cityBadgeByName.get(name);
+      if (!entry) {
+        const point = fixedCityLabelPoint(city);
+        if (!point) continue;
+        const badge = document.createElement('span');
+        badge.className = 'city-aggregate-badge';
+        const label = document.createElement('span');
+        label.className = 'city-aggregate-name';
+        label.textContent = name.replace(/市$/, '');
+        const total = document.createElement('strong');
+        total.className = 'city-aggregate-total';
+        badge.append(label, total);
+        const marker = L.marker([point[1], point[0]], {
+          pane: 'cityAggregates', title: name, alt: name,
+          icon: cityBadgeIcon(badge)
+        });
+        const centroid = city.properties?.centroid || point;
+        marker.on('click', () => map.setView([centroid[1], centroid[0]], DETAIL_ZOOM, { animate: true }));
+        entry = { marker, total };
+        cityBadgeByName.set(name, entry);
+      }
+      if (count) {
+        entry.total.textContent = `${count} 家`;
+        const title = `${name} · ${count} 家饲料厂`;
+        entry.marker.options.title = title;
+        entry.marker.options.alt = title;
+        const iconElement = entry.marker.getElement();
+        if (iconElement) {
+          iconElement.title = title;
+          iconElement.setAttribute('aria-label', title);
+        }
+        if (!cityAggregateLayer.hasLayer(entry.marker)) cityAggregateLayer.addLayer(entry.marker);
+      } else if (cityAggregateLayer.hasLayer(entry.marker)) {
+        cityAggregateLayer.removeLayer(entry.marker);
+      }
     }
     syncMapLayers();
   }
@@ -2066,6 +2100,7 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
       factoryPointLayer.clearLayers();
       dockPointLayer.clearLayers();
       cityAggregateLayer.clearLayers();
+      cityBadgeByName.clear();
       if (userLocationMarker) map.removeLayer(userLocationMarker);
       userLocationMarker = null;
     }
@@ -2156,7 +2191,10 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
         el.editorOverlay.hidden = false;
       }
     });
-    window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
+    window.addEventListener('resize', () => {
+      if (map) map.invalidateSize();
+      resizeCityBadges();
+    });
     if (!window.supabase || !window.L || !window.GUANGXI_BOUNDARY || !window.GUANGXI_CITIES_BOUNDARY) {
       showLoginError('地图程序文件未完整加载。请检查地图组件和边界文件。');
       el.loginSubmit.disabled = true;
