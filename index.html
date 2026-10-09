@@ -979,22 +979,28 @@ button:disabled{cursor:not-allowed;opacity:.58}
   place-items:center;
   width:100%;
   height:100%;
-  border:3px solid rgba(255,255,255,.8);
+  border:1.5px solid rgba(255,255,255,.8);
   border-radius:50%;
-  background:rgba(30,58,138,.62);
-  color:#fff;
-  box-shadow:0 3px 10px rgba(18,43,76,.18);
-  font-size:13px;
+  background:rgba(245,158,11,.5);
+  color:#1f2937;
+  box-shadow:0 2px 7px rgba(18,43,76,.16);
+  font-size:11px;
   font-weight:800;
   letter-spacing:-.02em;
   line-height:1;
-  text-shadow:0 1px 2px rgba(0,0,0,.13);
+  text-shadow:0 1px 1px rgba(255,255,255,.35);
   transition:transform .18s ease,box-shadow .18s ease;
 }
 .cluster-bubble:hover{transform:scale(1.06);box-shadow:0 5px 13px rgba(18,43,76,.24)}
-.cluster-bubble--dock{background:rgba(15,118,110,.62)}
-.user-location-icon{border:0!important;background:transparent!important;pointer-events:none}
-.user-location-icon svg{display:block;width:32px;height:32px;filter:drop-shadow(0 2px 3px rgba(18,43,76,.35))}
+.cluster-bubble--small{font-size:11px}
+.cluster-bubble--medium{font-size:12px}
+.cluster-bubble--large{font-size:13px}
+.cluster-bubble--dock{background:rgba(15,118,110,.5)}
+.city-count-icon{border:0!important;background:transparent!important;pointer-events:none}
+.city-count-badge{display:inline-flex;align-items:center;gap:4px;width:max-content;padding:2px 6px;border:1px solid rgba(255,255,255,.85);border-radius:999px;background:rgba(255,255,255,.82);color:#475569;box-shadow:0 1px 5px rgba(31,41,55,.13);font-size:10px;font-weight:650;line-height:1.35;white-space:nowrap;transform:translate(-50%,-50%)}
+.city-count-badge strong{color:#9a551d;font-size:10px;font-weight:800}
+.user-location-icon{border:0!important;background:transparent!important}
+.user-location-icon svg{display:block;width:16px;height:16px;filter:drop-shadow(0 1px 2px rgba(18,43,76,.45))}
 
 .modal-backdrop{background:rgba(16,32,39,.52)}
 .editor-card{border-color:rgba(255,255,255,.8);border-radius:20px;box-shadow:0 25px 70px rgba(16,32,39,.25)}
@@ -1254,6 +1260,10 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     '来宾市': '#ae8053', '崇左市': '#727cb8'
   };
   const CITIES = Object.keys(CITY_COLORS);
+  const CITY_FILL_COLORS = [
+    '#8fb5c9', '#b4a5c8', '#d0b093', '#9dbfa8', '#c8aaa9', '#91bac0', '#c8b997',
+    '#a9b3d1', '#abc2a0', '#c6a7ba', '#b6c6d2', '#c7b49e', '#a5c7c0', '#d0b4a8'
+  ];
   const $ = id => document.getElementById(id);
   const el = {
     loginOverlay: $('loginOverlay'), loginForm: $('loginForm'), loginEmail: $('loginEmail'),
@@ -1284,6 +1294,7 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
   let gxBounds;
   let factoryClusterGroup;
   let dockClusterGroup;
+  let cityCountLayer;
   let userLocationMarker;
   let records = [];
   let recordByKey = new Map();
@@ -1413,9 +1424,12 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     map.createPane('outsideMask');
     map.getPane('outsideMask').style.zIndex = 410;
     map.createPane('cityBorders');
-    map.getPane('cityBorders').style.zIndex = 415;
+    map.getPane('cityBorders').style.zIndex = 405;
     map.createPane('provinceBorder');
     map.getPane('provinceBorder').style.zIndex = 420;
+    map.createPane('cityCounts');
+    map.getPane('cityCounts').style.zIndex = 430;
+    map.getPane('cityCounts').style.pointerEvents = 'none';
     const outline = L.geoJSON(boundary, {
       pane: 'provinceBorder', interactive: false,
       style: { color: '#0f766e', weight: 2, opacity: 0.95, fillOpacity: 0 }
@@ -1436,12 +1450,19 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     }).addTo(map);
     const cityBoundaries = window.GUANGXI_CITIES_BOUNDARY;
     if (cityBoundaries?.features?.length) {
+      const colorByCode = new Map(cityBoundaries.features.map((city, index) =>
+        [String(city.properties?.adcode), CITY_FILL_COLORS[index % CITY_FILL_COLORS.length]]));
       L.geoJSON(cityBoundaries, {
         pane: 'cityBorders', interactive: false,
-        style: { color: '#d1d5db', weight: 1, opacity: 0.9, fillOpacity: 0 }
+        style: city => ({
+          fillColor: colorByCode.get(String(city.properties?.adcode)) || CITY_FILL_COLORS[0],
+          fillOpacity: 0.1, color: '#9ca3af', weight: 1.5, opacity: 0.9
+        })
       }).addTo(map);
     }
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+    cityCountLayer = L.layerGroup();
+    map.on('zoomend', syncCityCountLayer);
     factoryClusterGroup = createClusterGroup('factory').addTo(map);
     dockClusterGroup = createClusterGroup('dock').addTo(map);
     map.on('locationfound', event => {
@@ -1450,11 +1471,11 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
       userLocationMarker = L.marker(event.latlng, {
         icon: L.divIcon({
           className: 'user-location-icon',
-          html: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 28 28 16 22 4 28Z" fill="#fff" stroke="#243b53" stroke-width="2.2" stroke-linejoin="round"/></svg>',
-          iconSize: [32, 32], iconAnchor: [16, 16]
+          html: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 14.5 14 1.5 14Z" fill="#fff" stroke="#243b53" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+          iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -7]
         }),
-        title: '我的位置', alt: '我的位置', interactive: false, zIndexOffset: 1000
-      }).addTo(map);
+        title: '我的位置', alt: '我的位置', zIndexOffset: 1000
+      }).bindPopup('我的位置').addTo(map);
     });
     map.on('locationerror', () => {});
     map.setMaxBounds(gxBounds.pad(0.08));
@@ -1479,20 +1500,71 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
       zoomToBoundsOnClick: true,
       spiderfyOnMaxZoom: true,
       spiderfyDistanceMultiplier: 1.3,
-      maxClusterRadius: zoom => zoom >= 13 ? 28 : 48,
-      iconCreateFunction: cluster => L.divIcon({
-        className: 'location-cluster-icon',
-        html: `<span class="cluster-bubble${type === 'dock' ? ' cluster-bubble--dock' : ''}">${cluster.getChildCount()}</span>`,
-        iconSize: [44, 44], iconAnchor: type === 'dock' ? [0, 22] : [44, 22]
-      })
+      maxClusterRadius: zoom => zoom >= 13 ? 28 : zoom >= 10 ? 48 : 65,
+      iconCreateFunction: cluster => {
+        const count = cluster.getChildCount();
+        const size = count < 10 ? 28 : count < 50 ? 34 : 40;
+        const tier = count < 10 ? 'small' : count < 50 ? 'medium' : 'large';
+        return L.divIcon({
+          className: 'location-cluster-icon',
+          html: `<span class="cluster-bubble cluster-bubble--${type} cluster-bubble--${tier}">${count}</span>`,
+          iconSize: [size, size], iconAnchor: type === 'dock' ? [0, size / 2] : [size, size / 2]
+        });
+      }
     });
   }
   function fitProvince() {
     if (!map || !gxBounds) return;
     map.fitBounds(gxBounds, {
-      paddingTopLeft: [5, 5],
-      paddingBottomRight: [5, 5], maxZoom: 11, animate: false
+      paddingTopLeft: [0, 0],
+      paddingBottomRight: [0, 0], maxZoom: 11, animate: false
     });
+  }
+  function cityForPoint(lng, lat) {
+    for (const city of window.GUANGXI_CITIES_BOUNDARY?.features || []) {
+      const geometry = city.geometry;
+      if (!geometry) continue;
+      const polygons = geometry.type === 'MultiPolygon' ? geometry.coordinates : [geometry.coordinates];
+      if (polygons.some(polygon => pointInRing(lng, lat, polygon[0]) &&
+          !polygon.slice(1).some(hole => pointInRing(lng, lat, hole)))) {
+        return city.properties?.name || '';
+      }
+    }
+    return '';
+  }
+  function syncCityCountLayer() {
+    if (!map || !cityCountLayer) return;
+    const showCounts = map.getZoom() >= 8 && map.getZoom() < 10;
+    if (showCounts && !map.hasLayer(cityCountLayer)) cityCountLayer.addTo(map);
+    if (!showCounts && map.hasLayer(cityCountLayer)) map.removeLayer(cityCountLayer);
+  }
+  function renderCityFactoryCounts(rows) {
+    if (!cityCountLayer) return;
+    cityCountLayer.clearLayers();
+    const counts = new Map();
+    for (const record of rows) {
+      if (record.type !== 'factory' || !record.valid) continue;
+      const city = cityForPoint(record.lng, record.lat);
+      if (city) counts.set(city, (counts.get(city) || 0) + 1);
+    }
+    for (const city of window.GUANGXI_CITIES_BOUNDARY?.features || []) {
+      const name = city.properties?.name || '';
+      const centroid = city.properties?.centroid;
+      const count = counts.get(name) || 0;
+      if (!count || !Array.isArray(centroid) || centroid.length < 2) continue;
+      const badge = document.createElement('span');
+      badge.className = 'city-count-badge';
+      const label = document.createElement('span');
+      label.textContent = name.replace(/市$/, '');
+      const total = document.createElement('strong');
+      total.textContent = `${count}厂`;
+      badge.append(label, total);
+      L.marker([centroid[1], centroid[0]], {
+        pane: 'cityCounts', interactive: false,
+        icon: L.divIcon({ className: 'city-count-icon', html: badge, iconSize: [1, 1] })
+      }).addTo(cityCountLayer);
+    }
+    syncCityCountLayer();
   }
 
   async function fetchTable(table) {
@@ -1675,6 +1747,7 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     }
     factoryClusterGroup.addLayers(factoryMarkers);
     dockClusterGroup.addLayers(dockMarkers);
+    renderCityFactoryCounts(rows);
   }
   function renderEmpty(message) {
     el.resultList.replaceChildren();
@@ -1685,6 +1758,7 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     el.resultCount.textContent = '0';
     if (factoryClusterGroup) factoryClusterGroup.clearLayers();
     if (dockClusterGroup) dockClusterGroup.clearLayers();
+    if (cityCountLayer) cityCountLayer.clearLayers();
   }
   function render() {
     const rows = visibleRecords();
@@ -1929,8 +2003,8 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
     setPanelCollapsed(false);
     setPanelExpanded(false);
     setTimeout(() => { map.invalidateSize(); fitProvince(); }, 0);
-    map.locate({ setView: false, maxZoom: 16 });
     await refreshData({ quiet: true });
+    if (role !== 'none' && !el.appShell.hidden) map.locate({ setView: false, maxZoom: 16 });
   }
   function clearApp() {
     records = [];
@@ -1946,6 +2020,7 @@ window.GUANGXI_CITIES_BOUNDARY = {"type":"FeatureCollection","features":[{"type"
       map.closePopup();
       factoryClusterGroup.clearLayers();
       dockClusterGroup.clearLayers();
+      cityCountLayer.clearLayers();
       if (userLocationMarker) map.removeLayer(userLocationMarker);
       userLocationMarker = null;
     }
